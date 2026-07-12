@@ -81,6 +81,12 @@
   .vote-row button{background:var(--card);border:1px solid var(--line2);color:var(--muted);padding:8px 11px;border-radius:9px;font-size:12.5px;font-weight:700;flex:1;min-width:80px;max-width:130px}
   .vote-row button.sel{background:linear-gradient(180deg,var(--gold),#c68f35);color:#1a1206;border-color:var(--gold)}
   .vlabel{text-align:center;font-size:11.5px;color:var(--dim);margin-bottom:6px}
+  .vote-title{text-align:center;font-size:15px;font-weight:800;color:var(--gold-soft);margin:2px 0 10px}
+  .vote-title span{display:block;font-size:11px;color:var(--dim);font-weight:500;margin-top:3px}
+  .tally{text-align:center;font-size:13px;color:var(--muted);margin:10px 0 4px;padding:9px;background:var(--bg2);border:1px solid var(--line2);border-radius:10px}
+  .tally b{color:var(--ink);font-size:16px;margin:0 2px}
+  .rp-title{text-align:center;font-size:11.5px;color:var(--dim);font-weight:700;margin:16px 0 8px;border-top:1px solid var(--line);padding-top:14px}
+  .rp-title span{font-weight:400}
   .throws{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap}
   .throws .g{flex:1;min-width:150px;background:var(--bg2);border:1px solid var(--line);border-radius:11px;padding:9px}
   .throws .g .gl{font-size:11px;color:var(--dim);text-align:center;margin-bottom:6px;font-weight:700}
@@ -168,7 +174,7 @@
         <div class="fx" id="fx"></div>
       </div>
       <div class="ctrl">
-        <div class="vlabel">▼ 라이브 중 언제든 입장을 바꿀 수 있어요 (모두의 여론바가 움직입니다)</div>
+        <div class="vote-title">⚖ 당신의 판결 <span>아무 때나 바꿀 수 있어요 · 당신 표가 여론바를 움직입니다</span></div>
         <div class="vote-row" id="voteRow">
           <button data-s="2" onclick="vote(this,2)">강하게 🔵A</button>
           <button data-s="1" onclick="vote(this,1)">약하게 🔵A</button>
@@ -176,6 +182,8 @@
           <button data-s="-1" onclick="vote(this,-1)">약하게 🔴B</button>
           <button data-s="-2" onclick="vote(this,-2)">강하게 🔴B</button>
         </div>
+        <div class="tally" id="tally">🔵 A <b>0</b>표 · 중립 <b>0</b> · <b>0</b>표 B 🔴</div>
+        <div class="rp-title">🍿 관중 반응 <span>(재미용 — 판결엔 영향 없어요)</span></div>
         <div class="throws">
           <div class="g"><div class="gl">🔵 A에게</div><div class="bs">
             <button class="tbtn" onclick="throwAt('A','corn')">🍿</button>
@@ -308,6 +316,7 @@ function onState(s){
   document.getElementById('lb-a').textContent='🔵 A '+Math.round(a)+'%';
   document.getElementById('lb-b').textContent='B '+Math.round(100-a)+'% 🔴';
   document.getElementById('a-aud').textContent=(s.audience||0).toLocaleString();
+  if(s.tally){ document.getElementById('tally').innerHTML=`🔵 A <b>${s.tally.a}</b>표 · 중립 <b>${s.tally.n}</b> · <b>${s.tally.b}</b>표 B 🔴`; }
   document.getElementById('c-corn').textContent=(s.corn||0).toLocaleString();
   document.getElementById('c-rock').textContent=(s.rock||0).toLocaleString();
   document.getElementById('c-heat').textContent=(s.heat||0).toLocaleString();
@@ -371,10 +380,25 @@ function onVerdict(m){
   document.getElementById('v-win').textContent=m.winner+' 승';
   document.getElementById('v-tn').textContent=m.totalN.toLocaleString();
   setVbar('v-t',m.totalA);
-  document.getElementById('v-rn').textContent=m.realN.toLocaleString();
-  setVbar('v-r',m.realA);
-  document.getElementById('v-dbig').textContent=m.changed.toLocaleString()+'명이 마음을 바꿈';
-  document.getElementById('v-dsub').textContent=`B→A ${m.bToA.toLocaleString()} · A→B ${m.aToB.toLocaleString()}`;
+  // 실명 배심원 (없으면 없다고 표시)
+  if(m.realA==null){
+    document.getElementById('v-rn').textContent='0';
+    document.getElementById('v-ra').style.width='0%'; document.getElementById('v-ra').textContent='';
+    document.getElementById('v-rb').style.width='100%'; document.getElementById('v-rb').style.background='var(--line)';
+    document.getElementById('v-rb').textContent='실명 인증 배심원 없음';
+  } else {
+    document.getElementById('v-rn').textContent=m.realN.toLocaleString();
+    document.getElementById('v-rb').style.background='';
+    setVbar('v-r',m.realA);
+  }
+  // 델타 (실제 변경 인원)
+  if(m.changed>0){
+    document.getElementById('v-dbig').textContent=m.changed.toLocaleString()+'명이 마음을 바꿈';
+    document.getElementById('v-dsub').textContent=`B→A ${m.bToA.toLocaleString()} · A→B ${m.aToB.toLocaleString()}`;
+  } else {
+    document.getElementById('v-dbig').textContent='아직 아무도 안 바뀜';
+    document.getElementById('v-dsub').textContent=`총 ${m.totalN}명 투표 · 입장을 바꾼 사람이 나오면 여기 표시돼요`;
+  }
   const yc=document.getElementById('v-yc'); const aw=m.winSide==='A';
   const sb=myStance>0?'A':myStance<0?'B':'N', va=myVote>0?'A':myVote<0?'B':'N';
   let msg;
