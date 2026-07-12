@@ -36,20 +36,14 @@ const server = http.createServer((req, res) => {
 const stanceToPoints = (s) => ((s + 2) / 4) * 100;
 const sideOf = (s) => (s > 0 ? 'A' : s < 0 ? 'B' : 'N');
 
-function makeRoom(id, cat, topic, a, b, aClaim, bClaim, seedOpinion, seedAudience) {
-  // 가상 관중(baseline) — 소수의 실제 접속자만으로도 여론바가 그럴듯하게 보이도록
-  const vCount = 400 + Math.floor(Math.random() * 400);
-  const vAvg = seedOpinion; // 목표 평균 A-share
+function makeRoom(id, cat, topic, a, b, aClaim, bClaim) {
   return {
     id, cat, topic,
     fighterA: a, fighterB: b, aClaim, bClaim,
     status: 'live',
-    clients: new Set(),          // 이 방의 ws 집합
+    clients: new Set(),          // 이 방의 ws 집합 (= 실제 접속자)
     // 집계 카운터
     corn: 0, rock: 0, heat: 0,
-    // 여론(가상 baseline)
-    virtualSum: vAvg * vCount, virtualCount: vCount,
-    baseAudience: seedAudience,
     // 이번 tick 동안 쌓인 반응 (스톰 연출용 → 브로드캐스트 후 비움)
     reactionBuf: [],
     dirty: true,
@@ -65,13 +59,24 @@ const rooms = new Map();
   ['f1', 'life', '민트초코는 음식이다 vs 치약이다', '민초단_수호자', '반민초연합', '민초는 음식이다', '민초는 치약이다', 50, 3920],
 ].forEach(r => rooms.set(r[0], makeRoom(...r)));
 
-/* ---------------- 여론/상태 계산 ---------------- */
+/* ---------------- 여론/상태 계산 (전부 실제 접속자 기반) ---------------- */
 function computeOpinionA(room) {
-  let sum = room.virtualSum, count = room.virtualCount;
+  let sum = 0, count = 0;
   for (const ws of room.clients) {
     if (ws.stance != null) { sum += stanceToPoints(ws.stance); count += 1; }
   }
-  return count ? sum / count : 50;
+  return count ? sum / count : 50; // 투표한 사람 없으면 50:50
+}
+// 실제 표 집계 (A편 / 중립 / B편)
+function voteTally(room) {
+  let a = 0, b = 0, n = 0, voters = 0;
+  for (const ws of room.clients) {
+    if (ws.stance == null) continue;
+    voters++;
+    const side = sideOf(ws.stance);
+    if (side === 'A') a++; else if (side === 'B') b++; else n++;
+  }
+  return { a, b, n, voters };
 }
 function roomState(room) {
   return {
@@ -79,8 +84,9 @@ function roomState(room) {
     ringId: room.id,
     opinionA: Math.round(computeOpinionA(room) * 10) / 10,
     corn: room.corn, rock: room.rock, heat: room.heat,
-    audience: room.baseAudience + room.clients.size,
-    reactions: room.reactionBuf, // [{side, type, n}]
+    audience: room.clients.size,   // 실제 접속자 수
+    tally: voteTally(room),        // 실제 표
+    reactions: room.reactionBuf,   // [{side, type, n}]
   };
 }
 function lobbyPayload() {
@@ -89,7 +95,7 @@ function lobbyPayload() {
     rooms: [...rooms.values()].map(r => ({
       id: r.id, cat: r.cat, topic: r.topic,
       a: r.fighterA, b: r.fighterB, aClaim: r.aClaim, bClaim: r.bClaim,
-      audience: r.baseAudience + r.clients.size,
+      audience: r.clients.size,   // 실제 접속자 수
       heat: r.heat, opinionA: Math.round(computeOpinionA(r)),
       status: r.status,
     })),
@@ -134,7 +140,7 @@ wsLite.attach(server, (ws) => {
         r.dirty = true;
         send(ws, {
           type: 'joined',
-          ring: { id: r.id, cat: r.cat, topic: r.topic, a: r.fighterA, b: r.fighterB, aClaim: r.aClaim, bClaim: r.bClaim, audience: r.baseAudience + r.clients.size },
+          ring: { id: r.id, cat: r.cat, topic: r.topic, a: r.fighterA, b: r.fighterB, aClaim: r.aClaim, bClaim: r.bClaim, audience: r.clients.size },
           state: roomState(r),
         });
         break;
@@ -192,33 +198,34 @@ function leaveRoom(ws) {
 /* ---------------- 판결 ---------------- */
 function endMatch(room) {
   room.ended = true; room.status = 'ended';
+  const tally = voteTally(room);
   const opinionA = computeOpinionA(room);
   const aWin = opinionA >= 50;
-  const totalN = room.baseAudience + room.clients.size;
+  const totalN = tally.voters;   // 실제로 투표한 사람 수
 
-  // 실명 배심원 (실접속자 중 isRealName) — 가상 baseline은 익명으로 간주
+  // 실명 배심원 (실접속자 중 isRealName) — 전부 실제
   let realSum = 0, realCount = 0;
   for (const ws of room.clients) if (ws.isRealName && ws.stance != null) { realSum += stanceToPoints(ws.stance); realCount += 1; }
-  // 실접속 실명자가 적으면 전체 여론에 소폭 노이즈를 섞어 표시(데모용)
-  const realA = realCount >= 3 ? realSum / realCount : Math.max(5, Math.min(95, opinionA + (Math.random() * 8 - 4)));
+  const realA = realCount ? Math.round(realSum / realCount) : null; // 실명 배심원 없으면 null
 
-  // 델타: 실접속자 중 입장 전→후 side가 바뀐 수 + 가상 baseline 추정
+  // 델타: 입장 전(stanceBefore) → 지금(stance) side가 바뀐 실제 인원
   let bToA = 0, aToB = 0;
   for (const ws of room.clients) {
+    if (ws.stance == null) continue;
     const before = sideOf(ws.stanceBefore ?? 0), after = sideOf(ws.stance ?? 0);
-    if (before !== 'A' && after === 'A') bToA++;
-    if (before !== 'B' && after === 'B') aToB++;
+    if (before !== after) {
+      if (after === 'A') bToA++;
+      else if (after === 'B') aToB++;
+    }
   }
-  const vChanged = Math.round(totalN * (0.05 + Math.random() * 0.05));
-  const vB2A = Math.round(vChanged * (aWin ? 0.66 : 0.34));
-  bToA += vB2A; aToB += vChanged - vB2A;
 
   broadcast(room, {
     type: 'verdict',
     winner: aWin ? room.aClaim : room.bClaim,
     winSide: aWin ? 'A' : 'B',
-    totalA: Math.round(opinionA), totalB: Math.round(100 - opinionA), totalN,
-    realA: Math.round(realA), realB: Math.round(100 - realA), realN: Math.max(realCount, 120 + Math.floor(Math.random() * 300)),
+    totalA: Math.round(opinionA), totalB: Math.round(100 - opinionA),
+    totalN, tally,
+    realA, realB: realA == null ? null : 100 - realA, realN: realCount,
     changed: bToA + aToB, bToA, aToB,
   });
 
