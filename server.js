@@ -104,10 +104,13 @@ function lobbyPayload() {
 
 /* ---------------- WebSocket ---------------- */
 let nextId = 1;
+let nextRoomId = 1;                 // 유저가 만든 방 id 카운터
+const allClients = new Set();       // 접속한 모든 클라이언트 (로비 갱신 브로드캐스트용)
 const NICKS = ['아무개', '이름없는검투사', '관전러', '팝콘요정', '판사지망생', '중립기어', '키배관찰자'];
 
 function send(ws, obj) { if (ws.readyState === 1) ws.send(JSON.stringify(obj)); }
 function broadcast(room, obj) { for (const ws of room.clients) send(ws, obj); }
+function broadcastAll(obj) { for (const ws of allClients) send(ws, obj); } // 전체에게
 
 wsLite.attach(server, (ws) => {
   ws.id = nextId++;
@@ -116,6 +119,7 @@ wsLite.attach(server, (ws) => {
   ws.stance = null;
   ws.stanceBefore = null;
   ws.isRealName = false;
+  allClients.add(ws);
 
   send(ws, lobbyPayload());
 
@@ -177,6 +181,20 @@ wsLite.attach(server, (ws) => {
         break;
       }
 
+      case 'createRing': { // 유저가 새 방 개설
+        const topic = String(m.topic || '').slice(0, 120).trim();
+        if (!topic) { send(ws, { type: 'error', msg: '논점을 입력하세요' }); break; }
+        if (rooms.size >= 60) { send(ws, { type: 'error', msg: '방이 너무 많아요. 잠시 후 다시 시도하세요' }); break; }
+        const cat = ['game', 'love', 'work', 'life'].includes(m.cat) ? m.cat : 'life';
+        const aClaim = String(m.aClaim || '').slice(0, 60).trim() || 'A 입장';
+        const bClaim = String(m.bClaim || '').slice(0, 60).trim() || 'B 입장';
+        const id = 'u' + (nextRoomId++);
+        rooms.set(id, makeRoom(id, cat, topic, aClaim, bClaim, aClaim, bClaim));
+        broadcastAll(lobbyPayload());        // 모두의 로비에 새 방 표시
+        send(ws, { type: 'created', ringId: id });
+        break;
+      }
+
       case 'leave':
         leaveRoom(ws);
         send(ws, lobbyPayload());
@@ -184,7 +202,7 @@ wsLite.attach(server, (ws) => {
     }
   });
 
-  ws.on('close', () => leaveRoom(ws));
+  ws.on('close', () => { leaveRoom(ws); allClients.delete(ws); });
 });
 
 function clampStance(s) { s = s | 0; return s < -2 ? -2 : s > 2 ? 2 : s; }
