@@ -3,130 +3,174 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>사이버 투기장 — 실시간</title>
+<title>사이버 투기장</title>
 <style>
   :root{
-    --bg:#0d0b0f;--bg2:#15121a;--card:#191420;--line:#2c2434;--line2:#3a3048;
-    --ink:#efe9f5;--muted:#a99fb8;--dim:#7a7188;--gold:#e6b455;--gold-soft:#f3d99a;
-    --a:#4d93e6;--a2:#3f7fd0;--b:#e0483f;--b2:#c93b33;--green:#4bbf87;--live:#ff4d4d;
+    --bg:#313338; --bg-alt:#2b2d31; --bg-dark:#1e1f22; --input:#1e1f22;
+    --card:#2b2d31; --card-hover:#35373c; --floor:#232428;
+    --line:#3f4147; --line-soft:#26272b;
+    --head:#f2f3f5; --text:#dbdee1; --muted:#949ba4; --dim:#80848e;
+    --brand:#5865f2; --brand-hover:#4752c4;
+    --a:#5865f2; --a-soft:#818cf8; --b:#f23f43; --b-soft:#f57174;
+    --green:#23a55a; --yellow:#f0b132; --live:#f23f43;
   }
   *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--ink);font-family:"Pretendard","Apple SD Gothic Neo",system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans KR",sans-serif;line-height:1.6;font-size:15px;overflow-x:hidden}
-  button{font-family:inherit;cursor:pointer}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"gg sans","Inter","Pretendard","Apple SD Gothic Neo",-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans KR",sans-serif;
+    font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+  button{font-family:inherit;cursor:pointer;border:none}
   .hidden{display:none!important}
-  nav{position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:12px;padding:12px 20px;background:rgba(13,11,15,.85);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
-  .brand{font-weight:800;font-size:16px;cursor:pointer;display:flex;align-items:center;gap:7px}.brand .sw{color:var(--gold)}
-  .conn{margin-left:auto;font-size:12px;color:var(--dim);display:flex;align-items:center;gap:6px}
-  .dot{width:8px;height:8px;border-radius:50%;background:var(--dim)}.dot.ok{background:var(--green)}.dot.live{background:var(--live);animation:pulse 1.5s infinite}
-  @keyframes pulse{70%{box-shadow:0 0 0 7px rgba(255,77,77,0)}100%{box-shadow:0 0 0 0 rgba(255,77,77,0)}}
-  .wrap{max-width:960px;margin:0 auto;padding:22px 20px 80px}
-  h1,h2,h3{letter-spacing:-.4px}
+  h1,h2,h3{color:var(--head);letter-spacing:-.2px;margin:0}
+  ::-webkit-scrollbar{width:8px}::-webkit-scrollbar-thumb{background:var(--bg-dark);border-radius:8px}
+
+  /* nav */
+  nav{position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:12px;height:48px;padding:0 16px;
+    background:var(--bg-dark);border-bottom:1px solid var(--line-soft)}
+  .brand{display:flex;align-items:center;gap:9px;cursor:pointer;font-weight:700;color:var(--head);font-size:15px}
+  .logo{width:26px;height:26px;border-radius:8px;background:var(--brand);display:grid;place-items:center;color:#fff;font-weight:800;font-size:14px}
+  .conn{margin-left:auto;display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted);font-weight:500}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--dim)}
+  .dot.ok{background:var(--green)} .dot.live{background:var(--live)}
+  .dot.live.pulse{animation:pulse 1.6s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(242,63,67,.5)}70%{box-shadow:0 0 0 6px rgba(242,63,67,0)}100%{box-shadow:0 0 0 0 rgba(242,63,67,0)}}
+
+  .wrap{max-width:960px;margin:0 auto;padding:24px 18px 80px}
 
   /* lobby */
-  .lhead h2{font-size:24px;margin:0 0 2px}.lhead p{margin:0;color:var(--dim);font-size:13px}
-  .rings{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-top:18px}
-  .ring{background:var(--card);border:1px solid var(--line);border-radius:15px;padding:16px;cursor:pointer;transition:.15s}
-  .ring:hover{border-color:var(--gold);transform:translateY(-2px)}
-  .ring .top{display:flex;gap:7px;margin-bottom:9px}
-  .badge{font-size:11px;font-weight:800;padding:3px 8px;border-radius:6px}
-  .badge.live{background:rgba(255,77,77,.16);color:#ff8080;display:inline-flex;align-items:center;gap:4px}
-  .badge.cat{background:var(--bg2);color:var(--dim);border:1px solid var(--line)}
-  .ring h3{margin:0 0 12px;font-size:15.5px;line-height:1.4}
-  .fr{display:flex;align-items:center;gap:8px;font-size:12.5px;margin-bottom:11px}
-  .fr .f{flex:1;background:var(--bg2);border:1px solid var(--line);border-radius:8px;padding:7px 9px;min-width:0}
-  .fr .f.a{color:var(--a)}.fr .f.b{color:var(--b);text-align:right}.fr .vs{color:var(--gold);font-weight:800;font-size:12px}
-  .obar{height:22px;border-radius:6px;overflow:hidden;display:flex;font-size:11px;font-weight:700;margin-bottom:9px}
-  .obar .oa{background:linear-gradient(90deg,var(--a2),var(--a));color:#fff;display:grid;place-items:center}
-  .obar .ob{background:linear-gradient(90deg,var(--b),var(--b2));color:#fff;display:grid;place-items:center}
-  .meta{display:flex;gap:12px;font-size:12px;color:var(--dim)}.meta b{color:var(--muted)}
+  .lhead h2{font-size:20px}.lhead p{margin:4px 0 0;color:var(--dim);font-size:13px}
+  .rings{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:20px}
+  .ring{background:var(--card);border-radius:8px;padding:16px;cursor:pointer;transition:background .12s}
+  .ring:hover{background:var(--card-hover)}
+  .ring .top{display:flex;align-items:center;gap:8px;margin-bottom:11px}
+  .badge{font-size:11px;font-weight:700;letter-spacing:.03em;padding:2px 8px;border-radius:4px;text-transform:uppercase}
+  .badge.live{background:rgba(242,63,67,.15);color:#f57174;display:inline-flex;align-items:center;gap:5px}
+  .badge.cat{background:var(--bg-dark);color:var(--muted);font-weight:600}
+  .ring h3{font-size:15px;font-weight:600;color:var(--head);line-height:1.4;margin-bottom:14px}
+  .fr{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+  .side{flex:1;display:flex;align-items:center;gap:8px;min-width:0}
+  .side.b{flex-direction:row-reverse;text-align:right}
+  .avatar{width:30px;height:30px;border-radius:50%;flex:none;display:grid;place-items:center;color:#fff;font-weight:700;font-size:13px}
+  .avatar.a{background:var(--a)} .avatar.b{background:var(--b)}
+  .side .nm{font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .vs{font-size:11px;font-weight:800;color:var(--dim);flex:none}
+  .obar{height:8px;border-radius:99px;overflow:hidden;display:flex;background:var(--bg-dark);margin-bottom:6px}
+  .obar .oa{background:var(--a)} .obar .ob{background:var(--b)}
+  .obar-l{display:flex;justify-content:space-between;font-size:11px;font-weight:700;margin-bottom:10px}
+  .obar-l .la{color:var(--a-soft)} .obar-l .lb{color:var(--b-soft)}
+  .meta{display:flex;gap:14px;font-size:12px;color:var(--dim);font-weight:500}.meta b{color:var(--muted)}
 
-  /* topic/stance */
-  .stage{max-width:760px;margin:0 auto;background:linear-gradient(180deg,#161019,#100c16);border:1px solid var(--line2);border-radius:18px;overflow:hidden}
-  .stopbar{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line);font-size:12.5px}
-  .stopbar .back{background:var(--bg2);border:1px solid var(--line);color:var(--muted);padding:5px 11px;border-radius:7px;font-size:12.5px}
-  .stopbar .aud{margin-left:auto;color:var(--muted);display:flex;align-items:center;gap:6px}
-  .topic{padding:38px 26px;text-align:center}
-  .topic .cat{font-size:12px;color:var(--gold);letter-spacing:.12em;margin-bottom:12px}
-  .topic h2{font-size:22px;margin:0 auto 6px;max-width:560px;line-height:1.4}
-  .sides{display:flex;gap:10px;justify-content:center;margin:20px 0 26px;flex-wrap:wrap}
-  .sp{flex:1;min-width:200px;max-width:280px;background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:14px;text-align:left}
-  .sp.a{border-top:3px solid var(--a)}.sp.b{border-top:3px solid var(--b)}
-  .sp .w{font-weight:800;margin-bottom:3px}.sp.a .w{color:var(--a)}.sp.b .w{color:var(--b)}.sp .c{font-size:13px;color:var(--muted)}
-  .sq{font-size:14.5px;color:var(--gold-soft);font-weight:700}.sn{font-size:12px;color:var(--dim);margin-bottom:14px}
-  .stances{display:flex;gap:7px;justify-content:center;flex-wrap:wrap;margin-bottom:8px}
-  .stances button{background:var(--card);border:1px solid var(--line2);color:var(--muted);padding:10px 13px;border-radius:10px;font-size:13px;font-weight:700;flex:1;min-width:92px;max-width:140px}
-  .stances button:hover{background:var(--bg2);color:var(--ink)}
-  .stances button.sel{background:linear-gradient(180deg,var(--gold),#c68f35);color:#1a1206;border-color:var(--gold)}
-  .rnrow{display:flex;align-items:center;justify-content:center;gap:8px;margin:14px 0 4px;font-size:13px;color:var(--muted)}
-  .enter{padding:13px 26px;border-radius:11px;border:0;font-weight:800;font-size:15px;background:linear-gradient(180deg,var(--gold),#c68f35);color:#1a1206;margin-top:6px}
-  .enter:disabled{opacity:.4;cursor:default}
+  /* arena */
+  .stage{max-width:720px;margin:0 auto;background:var(--bg-alt);border-radius:10px;overflow:hidden}
+  .stopbar{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:1px solid var(--line-soft);font-size:13px}
+  .stopbar .back{background:none;color:var(--muted);font-size:14px;font-weight:600;padding:4px 6px;border-radius:4px}
+  .stopbar .back:hover{color:var(--head);background:var(--bg-dark)}
+  .stopbar .cat{color:var(--dim);font-weight:600}
+  .stopbar .aud{margin-left:auto;display:flex;align-items:center;gap:6px;color:var(--muted);font-weight:500;font-size:12.5px}
+
+  .topic{padding:36px 24px;text-align:center}
+  .topic .cat{font-size:12px;color:var(--brand);font-weight:700;letter-spacing:.03em;margin-bottom:12px;text-transform:uppercase}
+  .topic h2{font-size:20px;font-weight:700;max-width:520px;margin:0 auto 4px;line-height:1.4}
+  .sides{display:flex;gap:10px;justify-content:center;margin:22px 0 26px;flex-wrap:wrap}
+  .card-side{flex:1;min-width:200px;max-width:280px;background:var(--bg-dark);border-radius:8px;padding:14px;text-align:left;border-left:3px solid}
+  .card-side.a{border-color:var(--a)} .card-side.b{border-color:var(--b)}
+  .card-side .w{font-weight:700;font-size:13px;margin-bottom:4px}.card-side.a .w{color:var(--a-soft)}.card-side.b .w{color:var(--b-soft)}
+  .card-side .c{font-size:13px;color:var(--muted)}
+  .sq{font-size:15px;font-weight:700;color:var(--head)}.sn{font-size:12.5px;color:var(--dim);margin:4px 0 16px}
+  .stances{display:flex;gap:7px;justify-content:center;flex-wrap:wrap;margin-bottom:6px}
+
+  /* buttons — discord style */
+  .btn{padding:9px 16px;border-radius:8px;font-size:14px;font-weight:600;transition:background .12s}
+  .btn-primary{background:var(--brand);color:#fff}.btn-primary:hover{background:var(--brand-hover)}
+  .btn-primary:disabled{opacity:.5;cursor:default}
+  .btn-ghost{background:var(--input);color:var(--text)}.btn-ghost:hover{background:#292b2f}
+  .btn-danger{background:var(--b);color:#fff}.btn-danger:hover{filter:brightness(.92)}
+
+  .stances button{flex:1;min-width:90px;max-width:140px;padding:9px 10px;border-radius:8px;font-size:13px;font-weight:600;
+    background:var(--input);color:var(--muted);transition:.12s}
+  .stances button:hover{background:#292b2f;color:var(--text)}
+  .stances button.sel{background:var(--brand);color:#fff}
+  .rnrow{display:flex;align-items:center;justify-content:center;gap:8px;margin:16px 0 6px;font-size:13px;color:var(--muted)}
+  .rnrow input{accent-color:var(--brand)}
+  .enter{margin-top:8px;padding:11px 26px}
 
   /* live */
-  .lbar{padding:13px 16px 5px}
-  .lbl{display:flex;justify-content:between;font-size:13px;font-weight:800;margin-bottom:5px;justify-content:space-between}
-  .lbl .la{color:var(--a)}.lbl .lb{color:var(--b)}
-  .big-obar{height:28px;border-radius:8px;overflow:hidden;display:flex;box-shadow:inset 0 0 0 1px var(--line)}
-  .big-obar .oa{background:linear-gradient(90deg,var(--a2),var(--a));transition:width .5s ease;display:grid;place-items:center;color:#fff;font-weight:800;font-size:12px;min-width:30px}
-  .big-obar .ob{background:linear-gradient(90deg,var(--b),var(--b2));transition:width .5s ease;display:grid;place-items:center;color:#fff;font-weight:800;font-size:12px;min-width:30px}
-  .floor{position:relative;height:220px;overflow:hidden;border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:radial-gradient(90% 120% at 50% 120%,rgba(230,180,85,.06),transparent 60%)}
-  .glads{display:flex;height:100%;align-items:flex-end;justify-content:space-between;padding:0 26px 20px}
-  .glad{width:40%;text-align:center;transition:.3s}.glad .av{font-size:46px}.glad .nm{font-weight:800;font-size:13px;margin-top:4px}
-  .glad.a .nm{color:var(--a)}.glad.b .nm{color:var(--b)}.glad.hit{animation:hit .4s}
-  @keyframes hit{0%,100%{transform:none}30%{transform:translateX(-5px) rotate(-3deg)}70%{transform:translateX(4px) rotate(2deg)}}
+  .lbar{padding:14px 16px 8px}
+  .lbl{display:flex;justify-content:space-between;font-size:13px;font-weight:700;margin-bottom:7px}
+  .lbl .la{color:var(--a-soft)} .lbl .lb{color:var(--b-soft)}
+  .big-obar{height:10px;border-radius:99px;overflow:hidden;display:flex;background:var(--bg-dark)}
+  .big-obar .oa{background:var(--a);transition:width .5s ease} .big-obar .ob{background:var(--b);transition:width .5s ease}
+
+  .floor{position:relative;height:190px;overflow:hidden;background:var(--floor);border-top:1px solid var(--line-soft);border-bottom:1px solid var(--line-soft)}
+  .glads{display:flex;height:100%;align-items:center;justify-content:space-around;padding:0 30px}
+  .glad{text-align:center;transition:transform .3s}
+  .glad .av{width:64px;height:64px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:800;font-size:26px;margin:0 auto}
+  .glad.a .av{background:var(--a)} .glad.b .av{background:var(--b)}
+  .glad .nm{font-size:13px;font-weight:600;color:var(--text);margin-top:10px}
+  .glad.hit{animation:hit .4s}
+  @keyframes hit{0%,100%{transform:none}30%{transform:translateX(-6px) rotate(-4deg)}70%{transform:translateX(5px) rotate(3deg)}}
   .fx{position:absolute;inset:0;pointer-events:none;overflow:hidden}
   .particle{position:absolute;font-size:20px}
-  .danmaku{position:absolute;white-space:nowrap;font-size:12.5px;font-weight:700;color:#fff;text-shadow:0 1px 3px #000;background:rgba(25,20,32,.6);padding:2px 8px;border-radius:99px;border:1px solid var(--line2)}
-  .ctrl{padding:12px 16px 16px}
-  .vote-row{display:flex;gap:6px;justify-content:center;margin-bottom:10px;flex-wrap:wrap}
-  .vote-row button{background:var(--card);border:1px solid var(--line2);color:var(--muted);padding:8px 11px;border-radius:9px;font-size:12.5px;font-weight:700;flex:1;min-width:80px;max-width:130px}
-  .vote-row button.sel{background:linear-gradient(180deg,var(--gold),#c68f35);color:#1a1206;border-color:var(--gold)}
-  .vlabel{text-align:center;font-size:11.5px;color:var(--dim);margin-bottom:6px}
-  .vote-title{text-align:center;font-size:15px;font-weight:800;color:var(--gold-soft);margin:2px 0 10px}
-  .vote-title span{display:block;font-size:11px;color:var(--dim);font-weight:500;margin-top:3px}
-  .tally{text-align:center;font-size:13px;color:var(--muted);margin:10px 0 4px;padding:9px;background:var(--bg2);border:1px solid var(--line2);border-radius:10px}
-  .tally b{color:var(--ink);font-size:16px;margin:0 2px}
-  .rp-title{text-align:center;font-size:11.5px;color:var(--dim);font-weight:700;margin:16px 0 8px;border-top:1px solid var(--line);padding-top:14px}
-  .rp-title span{font-weight:400}
-  .throws{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap}
-  .throws .g{flex:1;min-width:150px;background:var(--bg2);border:1px solid var(--line);border-radius:11px;padding:9px}
-  .throws .g .gl{font-size:11px;color:var(--dim);text-align:center;margin-bottom:6px;font-weight:700}
-  .throws .g .bs{display:flex;gap:5px;justify-content:center}
-  .tbtn{background:var(--card);border:1px solid var(--line2);border-radius:8px;padding:6px 11px;font-size:15px}.tbtn:hover{transform:scale(1.1);border-color:var(--gold)}.tbtn:active{transform:scale(.9)}
-  .heat{display:flex;gap:12px;justify-content:center;font-size:11.5px;color:var(--dim);margin-bottom:10px}.heat b{color:var(--gold-soft)}
-  .chatbox{background:var(--bg2);border:1px solid var(--line);border-radius:11px;padding:9px;margin-bottom:10px}
-  .chatlog{height:96px;overflow-y:auto;font-size:12.5px;display:flex;flex-direction:column;gap:3px;margin-bottom:7px}
-  .chatlog .cm{line-height:1.4}.chatlog .cm .n{color:var(--dim)}.chatlog .cm.a .s{color:var(--a);font-weight:700}.chatlog .cm.b .s{color:var(--b);font-weight:700}
-  .chatin{display:flex;gap:6px}
-  .chatin select,.chatin input{background:var(--bg);border:1px solid var(--line2);color:var(--ink);border-radius:8px;padding:8px;font-size:13px;font-family:inherit}
-  .chatin input{flex:1}.chatin button{background:var(--card);border:1px solid var(--line2);color:var(--gold-soft);border-radius:8px;padding:8px 12px;font-weight:700;font-size:13px}
-  .close-btn{width:100%;padding:12px;border-radius:11px;border:0;font-weight:800;font-size:14px;background:linear-gradient(180deg,var(--b),var(--b2));color:#fff}
+  .danmaku{position:absolute;white-space:nowrap;font-size:12.5px;font-weight:600;color:#fff;background:rgba(30,31,34,.75);padding:3px 9px;border-radius:6px}
+
+  .ctrl{padding:16px}
+  .vote-title{text-align:center;font-size:15px;font-weight:700;color:var(--head);margin-bottom:3px}
+  .vote-sub{text-align:center;font-size:12px;color:var(--dim);margin-bottom:12px}
+  .vote-row{display:flex;gap:6px;justify-content:center;margin-bottom:12px;flex-wrap:wrap}
+  .vote-row button{flex:1;min-width:80px;max-width:120px;padding:9px 8px;border-radius:8px;font-size:12.5px;font-weight:600;
+    background:var(--input);color:var(--muted);transition:.12s}
+  .vote-row button:hover{background:#292b2f;color:var(--text)}
+  .vote-row button.sel{background:var(--brand);color:#fff}
+  .tally{text-align:center;font-size:13px;color:var(--muted);padding:10px;background:var(--bg-dark);border-radius:8px;font-weight:500}
+  .tally .ta{color:var(--a-soft);font-weight:700} .tally .tb{color:var(--b-soft);font-weight:700} .tally b{color:var(--head);margin:0 3px}
+
+  .react{margin-top:16px;padding-top:16px;border-top:1px solid var(--line-soft)}
+  .react-h{text-align:center;font-size:12px;color:var(--dim);font-weight:600;margin-bottom:10px}
+  .throws{display:flex;gap:16px;justify-content:center}
+  .tg{display:flex;flex-direction:column;align-items:center;gap:6px}
+  .tg .gl{font-size:11px;font-weight:700}.tg.a .gl{color:var(--a-soft)}.tg.b .gl{color:var(--b-soft)}
+  .tg .bs{display:flex;gap:5px}
+  .rbtn{background:var(--input);border-radius:8px;padding:6px 10px;font-size:16px;line-height:1;transition:.1s}
+  .rbtn:hover{background:#292b2f;transform:translateY(-1px)}.rbtn:active{transform:scale(.9)}
+  .heat{text-align:center;font-size:12px;color:var(--dim);margin-top:12px;font-weight:500}.heat b{color:var(--muted)}
+
+  .chatbox{margin-top:16px;background:var(--bg-dark);border-radius:8px;padding:10px}
+  .chatlog{height:100px;overflow-y:auto;font-size:13.5px;display:flex;flex-direction:column;gap:4px;margin-bottom:8px}
+  .cm{line-height:1.45;color:var(--text)}.cm .n{font-weight:600}.cm.a .n{color:var(--a-soft)}.cm.b .n{color:var(--b-soft)}.cm .n{color:var(--muted)}
+  .chatin{display:flex;gap:7px}
+  .chatin select,.chatin input{background:var(--input);border:none;color:var(--text);border-radius:8px;padding:9px;font-size:13.5px;font-family:inherit}
+  .chatin select{color:var(--muted)}
+  .chatin input{flex:1}.chatin input::placeholder{color:var(--dim)}
+  .chatin input:focus,.chatin select:focus{outline:1px solid var(--brand)}
+  .chatin button{background:var(--input);color:var(--text);border-radius:8px;padding:9px 14px;font-weight:600;font-size:13.5px}
+  .chatin button:hover{background:#292b2f}
+  .close-btn{width:100%;margin-top:16px;padding:11px}
 
   /* verdict */
-  .verdict{padding:32px 24px;text-align:center;animation:fade .5s}
+  .verdict{padding:34px 24px;text-align:center;animation:fade .4s}
   @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-  .gav{font-size:50px;animation:gav .8s ease}@keyframes gav{0%{transform:rotate(-40deg) translateY(-26px);opacity:0}60%{transform:rotate(8deg)}100%{transform:none;opacity:1}}
-  .verdict h2{font-size:26px;margin:6px 0 20px}.verdict h2 .win{color:var(--gold)}
-  .vb{max-width:440px;margin:0 auto}.vlab{font-size:12px;color:var(--dim);text-align:left;margin:12px 0 5px;font-weight:600}
-  .vbar{height:30px;border-radius:8px;overflow:hidden;display:flex;font-weight:800;font-size:12.5px}
-  .vbar .va{background:linear-gradient(90deg,var(--a2),var(--a));color:#fff;display:grid;place-items:center}
-  .vbar .vbb{background:linear-gradient(90deg,var(--b),var(--b2));color:#fff;display:grid;place-items:center}
-  .dbox{margin-top:18px;padding:16px;background:linear-gradient(180deg,rgba(230,180,85,.09),transparent);border:1px solid rgba(230,180,85,.3);border-radius:13px}
-  .dbox .dl{font-size:12.5px;color:var(--gold-soft);font-weight:700}.dbox .dbig{font-size:22px;font-weight:800;margin:3px 0}.dbox .dsub{font-size:12px;color:var(--muted)}
-  .yc{margin-top:12px;font-size:13.5px;padding:11px;border-radius:10px;background:var(--bg2);border:1px solid var(--line)}.yc b{color:var(--gold)}
-  .vact{display:flex;gap:9px;justify-content:center;margin-top:20px}.vact button{padding:11px 20px;border-radius:10px;font-weight:700;font-size:13.5px;border:1px solid var(--line2);background:var(--card);color:var(--ink)}
-  .vact button.pri{background:linear-gradient(180deg,var(--gold),#c68f35);color:#1a1206;border:0}
+  .v-label{display:inline-block;font-size:12px;font-weight:700;color:var(--dim);letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px}
+  .verdict h2{font-size:24px;font-weight:700;margin-bottom:22px}.verdict h2 .win{color:var(--brand)}
+  .vb{max-width:420px;margin:0 auto;text-align:left}
+  .vlab{font-size:12px;color:var(--dim);font-weight:600;margin:14px 0 6px}
+  .vbar{height:22px;border-radius:6px;overflow:hidden;display:flex;font-size:12px;font-weight:700}
+  .vbar .va{background:var(--a);color:#fff;display:grid;place-items:center} .vbar .vbb{background:var(--b);color:#fff;display:grid;place-items:center}
+  .dbox{margin-top:20px;padding:16px;background:var(--bg-dark);border-radius:8px;text-align:center}
+  .dbox .dl{font-size:12px;color:var(--yellow);font-weight:700;letter-spacing:.03em}
+  .dbox .dbig{font-size:20px;font-weight:800;color:var(--head);margin:4px 0}.dbox .dsub{font-size:12px;color:var(--muted)}
+  .yc{margin-top:14px;font-size:13.5px;color:var(--text);padding:12px;background:var(--bg-dark);border-radius:8px;text-align:center}.yc b{color:var(--head)}
+  .vact{display:flex;justify-content:center;margin-top:22px}
   @media(max-width:720px){.rings{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
 <nav>
-  <div class="brand" onclick="goLobby()"><span class="sw">⚔</span> 사이버 투기장</div>
-  <div class="conn"><span class="dot" id="cdot"></span><span id="cstat">연결 중…</span></div>
+  <div class="brand" onclick="goLobby()"><span class="logo">C</span> 사이버 투기장</div>
+  <div class="conn"><span class="dot" id="cdot"></span><span id="cstat">연결 중</span></div>
 </nav>
 
 <!-- LOBBY -->
 <div class="wrap" id="v-lobby">
-  <div class="lhead"><h2>⚔ 투기장 로비</h2><p>지금 불타는 링에 입장하세요 · 다른 사람과 실시간으로 연결됩니다</p></div>
+  <div class="lhead"><h2>투기장 로비</h2><p>진행 중인 링에 입장하세요 · 다른 사람과 실시간으로 연결됩니다</p></div>
   <div class="rings" id="rings"></div>
 </div>
 
@@ -135,7 +179,7 @@
   <div class="stage">
     <div class="stopbar">
       <button class="back" onclick="goLobby()">← 로비</button>
-      <span id="a-cat" style="color:var(--gold)"></span>
+      <span class="cat" id="a-cat"></span>
       <span class="aud"><span class="dot live"></span> <span id="a-aud">0</span>명 관전</span>
     </div>
 
@@ -144,84 +188,89 @@
       <div class="cat" id="t-cat"></div>
       <h2 id="t-title"></h2>
       <div class="sides">
-        <div class="sp a"><div class="w" id="t-an"></div><div class="c" id="t-ac"></div></div>
-        <div class="sp b"><div class="w" id="t-bn"></div><div class="c" id="t-bc"></div></div>
+        <div class="card-side a"><div class="w" id="t-an"></div><div class="c" id="t-ac"></div></div>
+        <div class="card-side b"><div class="w" id="t-bn"></div><div class="c" id="t-bc"></div></div>
       </div>
-      <div class="sq">⚖ 싸움을 보기 전 — 당신의 입장은?</div>
-      <div class="sn">비공개예요. 판이 끝나고 생각이 바뀌었는지 재는 용도.</div>
+      <div class="sq">싸움을 보기 전 — 당신의 입장은?</div>
+      <div class="sn">비공개입니다. 판이 끝나고 생각이 바뀌었는지 재는 용도예요.</div>
       <div class="stances" id="stances">
-        <button data-s="2" onclick="pick(this,2)">강하게 🔵A</button>
-        <button data-s="1" onclick="pick(this,1)">약하게 🔵A</button>
-        <button data-s="0" onclick="pick(this,0)">중립·모름</button>
-        <button data-s="-1" onclick="pick(this,-1)">약하게 🔴B</button>
-        <button data-s="-2" onclick="pick(this,-2)">강하게 🔴B</button>
+        <button data-s="2" onclick="pick(this,2)">강하게 A</button>
+        <button data-s="1" onclick="pick(this,1)">약하게 A</button>
+        <button data-s="0" onclick="pick(this,0)">중립</button>
+        <button data-s="-1" onclick="pick(this,-1)">약하게 B</button>
+        <button data-s="-2" onclick="pick(this,-2)">강하게 B</button>
       </div>
       <div class="rnrow"><label><input type="checkbox" id="realname"> 실명 검증 배심원으로 참여 (판결에 별도 표시)</label></div>
-      <button class="enter" id="enterBtn" disabled onclick="doJoin()">입장을 선택하세요</button>
+      <button class="btn btn-primary enter" id="enterBtn" disabled onclick="doJoin()">입장을 선택하세요</button>
     </div>
 
     <!-- live -->
     <div class="hidden" id="s-live">
       <div class="lbar">
-        <div class="lbl"><span class="la" id="lb-a">🔵 A 50%</span><span class="lb" id="lb-b">B 50% 🔴</span></div>
-        <div class="big-obar"><div class="oa" id="oa" style="width:50%">50%</div><div class="ob" id="ob" style="width:50%">50%</div></div>
+        <div class="lbl"><span class="la" id="lb-a">A 50%</span><span class="lb" id="lb-b">B 50%</span></div>
+        <div class="big-obar"><div class="oa" id="oa" style="width:50%"></div><div class="ob" id="ob" style="width:50%"></div></div>
       </div>
       <div class="floor">
         <div class="glads">
-          <div class="glad a" id="glad-a"><div class="av">🥊</div><div class="nm" id="g-a"></div></div>
-          <div class="glad b" id="glad-b"><div class="av">🥊</div><div class="nm" id="g-b"></div></div>
+          <div class="glad a" id="glad-a"><div class="av" id="av-a"></div><div class="nm" id="g-a"></div></div>
+          <div class="glad b" id="glad-b"><div class="av" id="av-b"></div><div class="nm" id="g-b"></div></div>
         </div>
         <div class="fx" id="fx"></div>
       </div>
       <div class="ctrl">
-        <div class="vote-title">⚖ 당신의 판결 <span>아무 때나 바꿀 수 있어요 · 당신 표가 여론바를 움직입니다</span></div>
+        <div class="vote-title">당신의 판결</div>
+        <div class="vote-sub">아무 때나 바꿀 수 있어요 · 당신 표가 여론바를 움직입니다</div>
         <div class="vote-row" id="voteRow">
-          <button data-s="2" onclick="vote(this,2)">강하게 🔵A</button>
-          <button data-s="1" onclick="vote(this,1)">약하게 🔵A</button>
+          <button data-s="2" onclick="vote(this,2)">강하게 A</button>
+          <button data-s="1" onclick="vote(this,1)">약하게 A</button>
           <button data-s="0" onclick="vote(this,0)">중립</button>
-          <button data-s="-1" onclick="vote(this,-1)">약하게 🔴B</button>
-          <button data-s="-2" onclick="vote(this,-2)">강하게 🔴B</button>
+          <button data-s="-1" onclick="vote(this,-1)">약하게 B</button>
+          <button data-s="-2" onclick="vote(this,-2)">강하게 B</button>
         </div>
-        <div class="tally" id="tally">🔵 A <b>0</b>표 · 중립 <b>0</b> · <b>0</b>표 B 🔴</div>
-        <div class="rp-title">🍿 관중 반응 <span>(재미용 — 판결엔 영향 없어요)</span></div>
-        <div class="throws">
-          <div class="g"><div class="gl">🔵 A에게</div><div class="bs">
-            <button class="tbtn" onclick="throwAt('A','corn')">🍿</button>
-            <button class="tbtn" onclick="throwAt('A','rock')">🪨</button>
-            <button class="tbtn" onclick="throwAt('A','clap')">👏</button>
-          </div></div>
-          <div class="g"><div class="gl">🔴 B에게</div><div class="bs">
-            <button class="tbtn" onclick="throwAt('B','corn')">🍿</button>
-            <button class="tbtn" onclick="throwAt('B','rock')">🪨</button>
-            <button class="tbtn" onclick="throwAt('B','clap')">👏</button>
-          </div></div>
+        <div class="tally" id="tally"><span class="ta">A</span> <b>0</b> · 중립 <b>0</b> · <b>0</b> <span class="tb">B</span></div>
+
+        <div class="react">
+          <div class="react-h">관중 반응 · 재미용이라 판결엔 영향 없어요</div>
+          <div class="throws">
+            <div class="tg a"><span class="gl">A에게</span><div class="bs">
+              <button class="rbtn" onclick="throwAt('A','corn')">🍿</button>
+              <button class="rbtn" onclick="throwAt('A','rock')">🪨</button>
+              <button class="rbtn" onclick="throwAt('A','clap')">👏</button>
+            </div></div>
+            <div class="tg b"><span class="gl">B에게</span><div class="bs">
+              <button class="rbtn" onclick="throwAt('B','corn')">🍿</button>
+              <button class="rbtn" onclick="throwAt('B','rock')">🪨</button>
+              <button class="rbtn" onclick="throwAt('B','clap')">👏</button>
+            </div></div>
+          </div>
+          <div class="heat">🍿 <b id="c-corn">0</b> · 🪨 <b id="c-rock">0</b> · 총 화력 <b id="c-heat">0</b></div>
         </div>
-        <div class="heat">🍿 <b id="c-corn">0</b> · 🪨 <b id="c-rock">0</b> · 총 화력 <b id="c-heat">0</b></div>
+
         <div class="chatbox">
           <div class="chatlog" id="chatlog"></div>
           <div class="chatin">
-            <select id="chatSide"><option value="A">🔵A 편</option><option value="B">🔴B 편</option><option value="N">관전평</option></select>
+            <select id="chatSide"><option value="A">A 편</option><option value="B">B 편</option><option value="N">관전평</option></select>
             <input id="chatText" placeholder="한 마디 던지기…" maxlength="200" onkeydown="if(event.key==='Enter')sendChat()">
-            <button onclick="sendChat()">발언</button>
+            <button onclick="sendChat()">전송</button>
           </div>
         </div>
-        <button class="close-btn" onclick="closeMatch()">🔨 판결 내리기</button>
+        <button class="btn btn-danger close-btn" onclick="closeMatch()">판결 내리기</button>
       </div>
     </div>
 
     <!-- verdict -->
     <div class="verdict hidden" id="s-verdict">
-      <div class="gav">🔨</div>
-      <h2>최종 판결: <span class="win" id="v-win"></span></h2>
+      <div class="v-label">최종 판결</div>
+      <h2><span class="win" id="v-win"></span></h2>
       <div class="vb">
         <div class="vlab">전체 배심원 <span id="v-tn"></span>명</div>
         <div class="vbar"><div class="va" id="v-ta"></div><div class="vbb" id="v-tb"></div></div>
-        <div class="vlab">✔ 실명 검증 배심원 <span id="v-rn"></span>명</div>
+        <div class="vlab">실명 검증 배심원 <span id="v-rn"></span>명</div>
         <div class="vbar"><div class="va" id="v-ra"></div><div class="vbb" id="v-rb"></div></div>
-        <div class="dbox"><div class="dl">🔥 이 판이 바꾼 마음</div><div class="dbig" id="v-dbig"></div><div class="dsub" id="v-dsub"></div></div>
+        <div class="dbox"><div class="dl">이 판이 바꾼 마음</div><div class="dbig" id="v-dbig"></div><div class="dsub" id="v-dsub"></div></div>
         <div class="yc" id="v-yc"></div>
-        <div class="vact"><button class="pri" onclick="goLobby()">🔥 다른 링 보기</button></div>
       </div>
+      <div class="vact"><button class="btn btn-primary" onclick="goLobby()">다른 링 보기</button></div>
     </div>
 
   </div>
@@ -234,17 +283,16 @@ function connect(){
   const proto = location.protocol==='https:'?'wss':'ws';
   ws = new WebSocket(proto+'://'+location.host);
   ws.onopen=()=>{ wsReady=true; setConn('ok','연결됨'); };
-  ws.onclose=()=>{ wsReady=false; setConn('','끊김 — 재연결 중'); clearTimeout(reconnectT); reconnectT=setTimeout(connect,1500); };
+  ws.onclose=()=>{ wsReady=false; setConn('','재연결 중'); clearTimeout(reconnectT); reconnectT=setTimeout(connect,1500); };
   ws.onerror=()=>{};
   ws.onmessage=(e)=>{ let m; try{m=JSON.parse(e.data)}catch{return} handle(m); };
 }
 function setConn(cls,txt){ const d=document.getElementById('cdot'); d.className='dot '+(cls||''); document.getElementById('cstat').textContent=txt; }
 function sendWs(o){ if(wsReady) ws.send(JSON.stringify(o)); }
 
-/* ---------- state ---------- */
 let cur=null, myStance=null, myVote=null;
-const catMap={game:'🎮 게임 분쟁',love:'💔 연애 갈등',work:'💼 직장 분쟁',life:'🍜 일상 논쟁'};
-const catShort={game:'게임',love:'연애',work:'회사·직장',life:'일상'};
+const catShort={game:'게임',love:'연애',work:'직장',life:'일상'};
+function initial(nm){ return (nm||'?').trim().charAt(0).toUpperCase(); }
 
 function handle(m){
   if(m.type==='lobby') renderLobby(m.rooms);
@@ -258,23 +306,28 @@ function handle(m){
 function goLobby(){
   document.getElementById('v-arena').classList.add('hidden');
   document.getElementById('v-lobby').classList.remove('hidden');
-  setConn(wsReady?'ok':'', wsReady?'연결됨':'연결 중…');
+  setConn(wsReady?'ok':'', wsReady?'연결됨':'연결 중');
   sendWs({type:'leave'});
 }
 function renderLobby(rooms){
   const el=document.getElementById('rings'); el.innerHTML='';
   rooms.forEach(r=>{
     const d=document.createElement('div'); d.className='ring'; d.onclick=()=>openRoom(r);
-    d.innerHTML=`<div class="top"><span class="badge live"><span class="dot live"></span>LIVE</span><span class="badge cat">${catShort[r.cat]||r.cat}</span></div>
+    d.innerHTML=`<div class="top"><span class="badge live"><span class="dot live pulse"></span>Live</span><span class="badge cat">${catShort[r.cat]||r.cat}</span></div>
       <h3>${esc(r.topic)}</h3>
-      <div class="fr"><div class="f a">🔵 ${esc(r.a)}</div><span class="vs">VS</span><div class="f b">${esc(r.b)} 🔴</div></div>
-      <div class="obar"><div class="oa" style="width:${r.opinionA}%">A ${r.opinionA}%</div><div class="ob" style="width:${100-r.opinionA}%">B ${100-r.opinionA}%</div></div>
-      <div class="meta"><span>👁 <b>${r.audience.toLocaleString()}</b></span><span>🔥 화력 <b>${r.heat}</b></span></div>`;
+      <div class="fr">
+        <div class="side a"><div class="avatar a">${esc(initial(r.a))}</div><div class="nm">${esc(r.a)}</div></div>
+        <span class="vs">VS</span>
+        <div class="side b"><div class="avatar b">${esc(initial(r.b))}</div><div class="nm">${esc(r.b)}</div></div>
+      </div>
+      <div class="obar-l"><span class="la">A ${r.opinionA}%</span><span class="lb">${100-r.opinionA}% B</span></div>
+      <div class="obar"><div class="oa" style="width:${r.opinionA}%"></div><div class="ob" style="width:${100-r.opinionA}%"></div></div>
+      <div class="meta"><span>👁 <b>${r.audience.toLocaleString()}</b> 관전</span><span>화력 <b>${r.heat}</b></span></div>`;
     el.appendChild(d);
   });
 }
 
-/* ---------- open room → topic/stance ---------- */
+/* ---------- open room ---------- */
 function openRoom(r){
   cur=r; myStance=null; myVote=null;
   document.getElementById('v-lobby').classList.add('hidden');
@@ -283,16 +336,16 @@ function openRoom(r){
   document.getElementById('s-live').classList.add('hidden');
   document.getElementById('s-verdict').classList.add('hidden');
   document.getElementById('a-cat').textContent=catShort[r.cat]||r.cat;
-  document.getElementById('t-cat').textContent=catMap[r.cat]||'';
+  document.getElementById('t-cat').textContent=(catShort[r.cat]||r.cat)+' 분쟁';
   document.getElementById('t-title').textContent=r.topic;
-  document.getElementById('t-an').textContent='🔵 '+r.a; document.getElementById('t-ac').textContent=r.aClaim;
-  document.getElementById('t-bn').textContent='🔴 '+r.b; document.getElementById('t-bc').textContent=r.bClaim;
+  document.getElementById('t-an').textContent='A · '+r.a; document.getElementById('t-ac').textContent=r.aClaim;
+  document.getElementById('t-bn').textContent='B · '+r.b; document.getElementById('t-bc').textContent=r.bClaim;
   document.getElementById('a-aud').textContent=(r.audience||0).toLocaleString();
   document.querySelectorAll('#stances button').forEach(b=>b.classList.remove('sel'));
   const eb=document.getElementById('enterBtn'); eb.disabled=true; eb.textContent='입장을 선택하세요';
 }
 function pick(btn,s){ myStance=s; document.querySelectorAll('#stances button').forEach(b=>b.classList.remove('sel')); btn.classList.add('sel');
-  const eb=document.getElementById('enterBtn'); eb.disabled=false; eb.textContent='⚔ 투기장 입장 →'; }
+  const eb=document.getElementById('enterBtn'); eb.disabled=false; eb.textContent='투기장 입장'; }
 function doJoin(){
   if(myStance===null) return;
   myVote=myStance;
@@ -304,23 +357,22 @@ function showLive(m){
   document.getElementById('s-topic').classList.add('hidden');
   document.getElementById('s-live').classList.remove('hidden');
   document.getElementById('g-a').textContent=cur.a; document.getElementById('g-b').textContent=cur.b;
+  document.getElementById('av-a').textContent=initial(cur.a); document.getElementById('av-b').textContent=initial(cur.b);
   document.getElementById('chatlog').innerHTML='';
-  // preset my vote highlight
   document.querySelectorAll('#voteRow button').forEach(b=>b.classList.toggle('sel', +b.dataset.s===myVote));
   onState(m.state);
 }
 function onState(s){
   const a=s.opinionA;
-  document.getElementById('oa').style.width=a+'%'; document.getElementById('oa').textContent=Math.round(a)+'%';
-  document.getElementById('ob').style.width=(100-a)+'%'; document.getElementById('ob').textContent=Math.round(100-a)+'%';
-  document.getElementById('lb-a').textContent='🔵 A '+Math.round(a)+'%';
-  document.getElementById('lb-b').textContent='B '+Math.round(100-a)+'% 🔴';
+  document.getElementById('oa').style.width=a+'%';
+  document.getElementById('ob').style.width=(100-a)+'%';
+  document.getElementById('lb-a').textContent='A '+Math.round(a)+'%';
+  document.getElementById('lb-b').textContent='B '+Math.round(100-a)+'%';
   document.getElementById('a-aud').textContent=(s.audience||0).toLocaleString();
-  if(s.tally){ document.getElementById('tally').innerHTML=`🔵 A <b>${s.tally.a}</b>표 · 중립 <b>${s.tally.n}</b> · <b>${s.tally.b}</b>표 B 🔴`; }
+  if(s.tally){ document.getElementById('tally').innerHTML=`<span class="ta">A</span> <b>${s.tally.a}</b> · 중립 <b>${s.tally.n}</b> · <b>${s.tally.b}</b> <span class="tb">B</span>`; }
   document.getElementById('c-corn').textContent=(s.corn||0).toLocaleString();
   document.getElementById('c-rock').textContent=(s.rock||0).toLocaleString();
   document.getElementById('c-heat').textContent=(s.heat||0).toLocaleString();
-  // reactions storm (from other users too)
   (s.reactions||[]).forEach(r=>{
     const emo = r.type==='rock'?'🪨':r.type==='corn'?'🍿':'👏';
     const n=Math.min(10,r.n);
@@ -330,11 +382,10 @@ function onState(s){
 }
 function vote(btn,s){ myVote=s; document.querySelectorAll('#voteRow button').forEach(b=>b.classList.remove('sel')); btn.classList.add('sel'); sendWs({type:'vote',stance:s}); }
 
-/* throwing — 0.5s 버퍼링 후 전송 (집계) */
 let buf={corn:0,rock:0,side:null};
 function throwAt(side,type){
   const emo = type==='rock'?'🪨':type==='corn'?'🍿':'👏';
-  spawnParticle(side,emo,2); // 로컬 즉시 연출
+  spawnParticle(side,emo,2);
   if(type==='corn') buf.corn++; if(type==='rock') buf.rock++;
   buf.side=side;
 }
@@ -342,19 +393,19 @@ setInterval(()=>{ if(buf.corn||buf.rock){ sendWs({type:'react',side:buf.side,cor
 
 function spawnParticle(side,emoji,count){
   const layer=document.getElementById('fx'); if(!layer) return; const w=layer.clientWidth;
-  const tx = side==='A'? w*0.3 : w*0.7;
+  const tx = side==='A'? w*0.25 : w*0.75;
   for(let i=0;i<(count||1);i++){
     const p=document.createElement('div'); p.className='particle'; p.textContent=emoji;
-    const sx=Math.random()*w, sy=layer.clientHeight+10, ex=tx+(Math.random()*70-35), ey=50+Math.random()*70;
+    const sx=Math.random()*w, sy=layer.clientHeight+10, ex=tx+(Math.random()*70-35), ey=40+Math.random()*70;
     p.style.left=sx+'px'; p.style.top=sy+'px'; layer.appendChild(p);
     const dur=650+Math.random()*350;
-    p.animate([{transform:'translate(0,0)',opacity:1},{transform:`translate(${ex-sx}px,${ey-sy}px) rotate(${Math.random()*400-200}deg)`,opacity:1,offset:.75},{transform:`translate(${ex-sx}px,${ey-sy+16}px)`,opacity:0}],{duration:dur,easing:'cubic-bezier(.3,.7,.4,1)'});
+    p.animate([{transform:'translate(0,0)',opacity:1},{transform:`translate(${ex-sx}px,${ey-sy}px) rotate(${Math.random()*360-180}deg)`,opacity:1,offset:.75},{transform:`translate(${ex-sx}px,${ey-sy+16}px)`,opacity:0}],{duration:dur,easing:'cubic-bezier(.3,.7,.4,1)'});
     setTimeout(()=>p.remove(),dur);
   }
 }
 function spawnDanmaku(txt){
   const layer=document.getElementById('fx'); if(!layer) return; const w=layer.clientWidth;
-  const d=document.createElement('div'); d.className='danmaku'; d.textContent=txt; d.style.top=(8+Math.random()*80)+'px'; d.style.left=w+'px'; layer.appendChild(d);
+  const d=document.createElement('div'); d.className='danmaku'; d.textContent=txt; d.style.top=(8+Math.random()*70)+'px'; d.style.left=w+'px'; layer.appendChild(d);
   const dur=3000+Math.random()*1400; d.animate([{transform:'translateX(0)'},{transform:`translateX(${-(w+300)}px)`}],{duration:dur,easing:'linear'}); setTimeout(()=>d.remove(),dur);
 }
 
@@ -366,8 +417,8 @@ function sendChat(){
 function onChat(m){
   const log=document.getElementById('chatlog');
   const d=document.createElement('div'); d.className='cm '+(m.side==='A'?'a':m.side==='B'?'b':'');
-  const tag=m.side==='A'?'<span class="s">[🔵A]</span> ':m.side==='B'?'<span class="s">[🔴B]</span> ':'';
-  d.innerHTML=`${tag}<span class="n">${esc(m.nick)}:</span> ${esc(m.text)}`;
+  const tag=m.side==='A'?'[A] ':m.side==='B'?'[B] ':'';
+  d.innerHTML=`<span class="n">${tag}${esc(m.nick)}</span> ${esc(m.text)}`;
   log.appendChild(d); log.scrollTop=log.scrollHeight;
   spawnDanmaku(m.text.slice(0,24));
 }
@@ -376,11 +427,10 @@ function onChat(m){
 function closeMatch(){ sendWs({type:'close'}); }
 function onVerdict(m){
   document.getElementById('s-live').classList.add('hidden');
-  const v=document.getElementById('s-verdict'); v.classList.remove('hidden');
+  document.getElementById('s-verdict').classList.remove('hidden');
   document.getElementById('v-win').textContent=m.winner+' 승';
   document.getElementById('v-tn').textContent=m.totalN.toLocaleString();
   setVbar('v-t',m.totalA);
-  // 실명 배심원 (없으면 없다고 표시)
   if(m.realA==null){
     document.getElementById('v-rn').textContent='0';
     document.getElementById('v-ra').style.width='0%'; document.getElementById('v-ra').textContent='';
@@ -391,7 +441,6 @@ function onVerdict(m){
     document.getElementById('v-rb').style.background='';
     setVbar('v-r',m.realA);
   }
-  // 델타 (실제 변경 인원)
   if(m.changed>0){
     document.getElementById('v-dbig').textContent=m.changed.toLocaleString()+'명이 마음을 바꿈';
     document.getElementById('v-dsub').textContent=`B→A ${m.bToA.toLocaleString()} · A→B ${m.aToB.toLocaleString()}`;
@@ -402,10 +451,10 @@ function onVerdict(m){
   const yc=document.getElementById('v-yc'); const aw=m.winSide==='A';
   const sb=myStance>0?'A':myStance<0?'B':'N', va=myVote>0?'A':myVote<0?'B':'N';
   let msg;
-  if(sb==='N') msg='당신은 <b>중립</b>으로 입장했어요. 어느 쪽으로 기울었나요? 🤔';
-  else if((sb==='A'&&aw)||(sb==='B'&&!aw)) msg=`처음 입장(${sb==='A'?'🔵A':'🔴B'})이 판결과 <b>일치</b>! 👑 명배심원`;
-  else msg=`처음엔 ${sb==='A'?'🔵A':'🔴B'} 였는데 판결은 반대네요. <b>생각 좀 바뀌었어요?</b> 😏`;
-  if(sb!=='N'&&va!=='N'&&sb!==va) msg+=`<br><span style="color:var(--gold-soft)">…실제로 판 보면서 ${sb==='A'?'🔵A':'🔴B'}→${va==='A'?'🔵A':'🔴B'} 로 바꾸셨네요!</span>`;
+  if(sb==='N') msg='당신은 <b>중립</b>으로 입장했어요. 어느 쪽으로 기울었나요?';
+  else if((sb==='A'&&aw)||(sb==='B'&&!aw)) msg=`처음 입장(${sb})이 판결과 <b>일치</b>했어요. 명배심원!`;
+  else msg=`처음엔 ${sb} 였는데 판결은 반대네요. <b>생각, 좀 바뀌었어요?</b>`;
+  if(sb!=='N'&&va!=='N'&&sb!==va) msg+=`<br><span style="color:var(--yellow)">…실제로 판 보면서 ${sb}→${va} 로 바꾸셨네요.</span>`;
   yc.innerHTML=msg;
 }
 function setVbar(p,a){ document.getElementById(p+'a').style.width=a+'%'; document.getElementById(p+'a').textContent='A '+a+'%';
