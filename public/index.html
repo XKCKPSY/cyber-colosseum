@@ -3,7 +3,17 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>사이버 투기장</title>
+<title>사이버 투기장 — 실시간 키배 콜로세움</title>
+<meta name="description" content="지금 라이브로 키배 뜨는 중. 선수로 참전하거나 배심원으로 판결을 내려라. 1부·2부 정규 매치, 중간 결과 공개, 최종 판결까지.">
+<meta name="theme-color" content="#1e1f22">
+<meta property="og:type" content="website">
+<meta property="og:title" content="⚔ 사이버 투기장 — 실시간 키배 콜로세움">
+<meta property="og:description" content="지금 라이브로 키배 뜨는 중. 선수로 참전하거나 배심원이 되어 판결을 내려라.">
+<meta property="og:site_name" content="사이버 투기장">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="⚔ 사이버 투기장 — 실시간 키배 콜로세움">
+<meta name="twitter:description" content="선수로 참전하거나 배심원이 되어 판결을 내려라.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%235865f2'/%3E%3Ctext x='50' y='68' font-size='52' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'%3EC%3C/text%3E%3C/svg%3E">
 <style>
   :root{
     --bg:#313338; --bg-alt:#2b2d31; --bg-dark:#1e1f22; --input:#1e1f22;
@@ -128,6 +138,11 @@
   .glad .av{width:64px;height:64px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:800;font-size:26px;margin:0 auto}
   .glad.a .av{background:var(--a)} .glad.b .av{background:var(--b)}
   .glad .nm{font-size:13px;font-weight:600;color:var(--text);margin-top:10px}
+  .glad .nm.empty{color:var(--dim);font-weight:500}
+  .glad .av.empty{background:var(--bg-dark);color:var(--dim);border:2px dashed var(--line)}
+  .seat-btn{margin-top:7px;padding:5px 14px;border-radius:8px;font-size:12px;font-weight:700;background:var(--brand);color:#fff;transition:.12s}
+  .seat-btn:hover{background:var(--brand-hover)}
+  .seat-btn.quit{background:var(--input);color:var(--muted)}.seat-btn.quit:hover{background:#292b2f;color:var(--text)}
   .glad.hit{animation:hit .4s}
   @keyframes hit{0%,100%{transform:none}30%{transform:translateX(-6px) rotate(-4deg)}70%{transform:translateX(5px) rotate(3deg)}}
   .fx{position:absolute;inset:0;pointer-events:none;overflow:hidden}
@@ -158,6 +173,12 @@
   .chatbox{margin-top:16px;background:var(--bg-dark);border-radius:8px;padding:10px}
   .chatlog{height:100px;overflow-y:auto;font-size:13.5px;display:flex;flex-direction:column;gap:4px;margin-bottom:8px}
   .cm{line-height:1.45;color:var(--text)}.cm .n{font-weight:600}.cm.a .n{color:var(--a-soft)}.cm.b .n{color:var(--b-soft)}.cm .n{color:var(--muted)}
+  /* 선수 발언 — 눈에 확 띄게 */
+  .cm.fm{padding:6px 9px;border-radius:8px;margin:2px 0}
+  .cm.fm.a{background:rgba(88,101,242,.14);border-left:3px solid var(--a)}
+  .cm.fm.b{background:rgba(242,63,67,.12);border-left:3px solid var(--b)}
+  .cm.fm .n{color:var(--head)}
+  .cm.sys{color:var(--dim);font-size:12.5px;text-align:center}
   .chatin{display:flex;gap:7px}
   .chatin select,.chatin input{background:var(--input);border:none;color:var(--text);border-radius:8px;padding:9px;font-size:13.5px;font-family:inherit}
   .chatin select{color:var(--muted)}
@@ -181,7 +202,26 @@
   .dbox .dbig{font-size:20px;font-weight:800;color:var(--head);margin:4px 0}.dbox .dsub{font-size:12px;color:var(--muted)}
   .yc{margin-top:14px;font-size:13.5px;color:var(--text);padding:12px;background:var(--bg-dark);border-radius:8px;text-align:center}.yc b{color:var(--head)}
   .vact{display:flex;justify-content:center;margin-top:22px}
+  .share-btn{background:none;color:var(--muted);font-size:12.5px;font-weight:600;padding:4px 8px;border-radius:4px}
+  .share-btn:hover{color:var(--head);background:var(--bg-dark)}
+  .recruit{color:var(--yellow);font-weight:700}
   @media(max-width:720px){.rings{grid-template-columns:1fr}}
+  /* 모바일 (커뮤니티 유입 대부분이 폰) */
+  @media(max-width:560px){
+    .wrap{padding:14px 10px 60px}
+    .topic{padding:24px 14px}
+    .floor{height:150px}
+    .glad .av{width:52px;height:52px;font-size:21px}
+    .timer{font-size:17px}
+    .mnums{font-size:11.5px}
+    .mhead{flex-wrap:wrap;gap:7px}
+    .stances button,.vote-row button{min-width:62px;font-size:12px;padding:8px 6px}
+    .chatin select{max-width:86px;font-size:12.5px}
+    .chatin input{min-width:0}
+    .lhead{flex-direction:column;align-items:stretch}
+    .lhead .btn{width:100%}
+    .card-side{min-width:140px}
+  }
 </style>
 </head>
 <body>
@@ -222,6 +262,7 @@
     <div class="stopbar">
       <button class="back" onclick="goLobby()">← 로비</button>
       <span class="cat" id="a-cat"></span>
+      <button class="share-btn" id="shareBtn" onclick="shareRoom()">🔗 공유</button>
       <span class="aud"><span class="dot live"></span> <span id="a-aud">0</span>명 관전</span>
     </div>
 
@@ -263,8 +304,8 @@
       </div>
       <div class="floor">
         <div class="glads">
-          <div class="glad a" id="glad-a"><div class="av" id="av-a"></div><div class="nm" id="g-a"></div></div>
-          <div class="glad b" id="glad-b"><div class="av" id="av-b"></div><div class="nm" id="g-b"></div></div>
+          <div class="glad a" id="glad-a"><div class="av" id="av-a">?</div><div class="nm empty" id="g-a">빈 자리</div><button class="seat-btn" id="seat-a" onclick="claimSeat('A')">⚔ 참전</button></div>
+          <div class="glad b" id="glad-b"><div class="av" id="av-b">?</div><div class="nm empty" id="g-b">빈 자리</div><button class="seat-btn" id="seat-b" onclick="claimSeat('B')">⚔ 참전</button></div>
         </div>
         <div class="fx" id="fx"></div>
       </div>
@@ -340,19 +381,56 @@ function connect(){
 function setConn(cls,txt){ const d=document.getElementById('cdot'); d.className='dot '+(cls||''); document.getElementById('cstat').textContent=txt; }
 function sendWs(o){ if(wsReady) ws.send(JSON.stringify(o)); }
 
-let cur=null, myStance=null, myVote=null;
+let cur=null, myStance=null, myVote=null, myNick=null, mySeat=null;
 const catShort={game:'게임',love:'연애',work:'직장',life:'일상'};
 function initial(nm){ return (nm||'?').trim().charAt(0).toUpperCase(); }
 
 function handle(m){
   if(m.type==='lobby') renderLobby(m.rooms);
-  else if(m.type==='joined'){ cur=m.ring; showLive(m); }
+  else if(m.type==='joined'){ cur=m.ring; myNick=m.you; showLive(m); }
   else if(m.type==='state') onState(m);
   else if(m.type==='phase') onPhase(m);
   else if(m.type==='chat') onChat(m);
+  else if(m.type==='seat') onSeat(m);
   else if(m.type==='verdict') onVerdict(m);
   else if(m.type==='created') onCreated(m);
   else if(m.type==='error') { const el=document.getElementById('cf-msg'); if(el) el.textContent=m.msg||'오류'; }
+}
+
+/* ---------- 선수 자리 ---------- */
+function claimSeat(side){ sendWs({type:'seat', side: mySeat===side ? 'none' : side}); }
+function renderSeats(seats){
+  if(!seats) return;
+  mySeat = seats.a===myNick ? 'A' : seats.b===myNick ? 'B' : null;
+  [['a',seats.a],['b',seats.b]].forEach(([k,nick])=>{
+    const av=document.getElementById('av-'+k), nm=document.getElementById('g-'+k), btn=document.getElementById('seat-'+k);
+    if(nick){
+      av.textContent=initial(nick); av.classList.remove('empty');
+      nm.textContent=nick + (nick===myNick?' (나)':''); nm.classList.remove('empty');
+      if(nick===myNick){ btn.style.display=''; btn.textContent='기권'; btn.classList.add('quit'); }
+      else btn.style.display='none';
+    } else {
+      av.textContent='?'; av.classList.add('empty');
+      nm.textContent='빈 자리'; nm.classList.add('empty');
+      btn.style.display=''; btn.textContent='⚔ 참전'; btn.classList.remove('quit');
+    }
+  });
+}
+function onSeat(m){
+  const log=document.getElementById('chatlog');
+  const d=document.createElement('div'); d.className='cm sys';
+  d.textContent = m.nick ? `⚔ ${m.nick}님이 ${m.side} 선수로 참전!` : `${m.side} 선수가 자리를 떠났어요`;
+  log.appendChild(d); log.scrollTop=log.scrollHeight;
+}
+
+/* ---------- 공유 (커뮤니티 붙여넣기용) ---------- */
+function shareRoom(){
+  if(!cur) return;
+  const url=location.origin+'/#'+cur.id;
+  const btn=document.getElementById('shareBtn');
+  const done=()=>{ btn.textContent='✓ 복사됨!'; setTimeout(()=>btn.textContent='🔗 공유',1500); };
+  if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(done).catch(()=>prompt('이 링크를 복사하세요',url));
+  else prompt('이 링크를 복사하세요',url);
 }
 
 /* ---------- 경기 페이즈 / 타이머 ---------- */
@@ -436,10 +514,18 @@ function goLobby(){
   document.getElementById('v-create').classList.add('hidden');
   document.getElementById('v-lobby').classList.remove('hidden');
   setConn(wsReady?'ok':'', wsReady?'연결됨':'연결 중');
+  if(location.hash) history.replaceState(null,'',location.pathname); // 딥링크 해시 제거
+  mySeat=null;
   sendWs({type:'leave'});
 }
 function renderLobby(rooms){
   window.__lastRooms = rooms;
+  // 딥링크: /#방id 로 들어온 경우 해당 링 바로 열기 — 최초 로비 수신 1회만 (커뮤니티 공유 유입)
+  const firstLobby=!window.__gotLobby; window.__gotLobby=true;
+  if(firstLobby && location.hash.length>1){
+    const target=rooms.find(x=>x.id===location.hash.slice(1));
+    if(target){ openRoom(target); }
+  }
   const el=document.getElementById('rings'); el.innerHTML='';
   rooms.forEach(r=>{
     const d=document.createElement('div'); d.className='ring'; d.onclick=()=>openRoom(r);
@@ -450,12 +536,15 @@ function renderLobby(rooms){
       : `<div class="obar-l"><span style="color:var(--dim)">🔒 우세 비공개</span><span style="color:var(--dim)">투표 ${(r.votes||0).toLocaleString()}</span></div>
          <div class="obar"><div style="width:100%;background:var(--line)"></div></div>`;
     const pl=phaseLabel[r.phase]||'진행';
+    const sa=r.seats&&r.seats.a, sb=r.seats&&r.seats.b;
+    const nmA=sa?`<div class="nm">${esc(sa)}</div>`:`<div class="nm recruit">도전자 모집중</div>`;
+    const nmB=sb?`<div class="nm">${esc(sb)}</div>`:`<div class="nm recruit">도전자 모집중</div>`;
     d.innerHTML=`<div class="top"><span class="badge live"><span class="dot live pulse"></span>Live</span><span class="badge cat">${catShort[r.cat]||r.cat}</span><span class="badge cat">${pl}</span></div>
       <h3>${esc(r.topic)}</h3>
       <div class="fr">
-        <div class="side a"><div class="avatar a">${esc(initial(r.a))}</div><div class="nm">${esc(r.a)}</div></div>
+        <div class="side a"><div class="avatar a">${sa?esc(initial(sa)):'?'}</div>${nmA}</div>
         <span class="vs">VS</span>
-        <div class="side b"><div class="avatar b">${esc(initial(r.b))}</div><div class="nm">${esc(r.b)}</div></div>
+        <div class="side b"><div class="avatar b">${sb?esc(initial(sb)):'?'}</div>${nmB}</div>
       </div>
       ${bar}
       <div class="meta"><span>👁 <b>${r.audience.toLocaleString()}</b> 관전</span><span>화력 <b>${r.heat}</b></span></div>`;
@@ -475,9 +564,10 @@ function openRoom(r){
   document.getElementById('a-cat').textContent=catShort[r.cat]||r.cat;
   document.getElementById('t-cat').textContent=(catShort[r.cat]||r.cat)+' 분쟁';
   document.getElementById('t-title').textContent=r.topic;
-  document.getElementById('t-an').textContent='A · '+r.a; document.getElementById('t-ac').textContent=r.aClaim;
-  document.getElementById('t-bn').textContent='B · '+r.b; document.getElementById('t-bc').textContent=r.bClaim;
+  document.getElementById('t-an').textContent='A 입장'; document.getElementById('t-ac').textContent=r.aClaim;
+  document.getElementById('t-bn').textContent='B 입장'; document.getElementById('t-bc').textContent=r.bClaim;
   document.getElementById('a-aud').textContent=(r.audience||0).toLocaleString();
+  history.replaceState(null,'','#'+r.id); // 공유 가능한 방 주소
   document.querySelectorAll('#stances button').forEach(b=>b.classList.remove('sel'));
   const eb=document.getElementById('enterBtn'); eb.disabled=true; eb.textContent='입장을 선택하세요';
 }
@@ -493,14 +583,13 @@ function doJoin(){
 function showLive(m){
   document.getElementById('s-topic').classList.add('hidden');
   document.getElementById('s-live').classList.remove('hidden');
-  document.getElementById('g-a').textContent=cur.a; document.getElementById('g-b').textContent=cur.b;
-  document.getElementById('av-a').textContent=initial(cur.a); document.getElementById('av-b').textContent=initial(cur.b);
   document.getElementById('chatlog').innerHTML='';
   document.querySelectorAll('#voteRow button').forEach(b=>b.classList.toggle('sel', +b.dataset.s===myVote));
   onState(m.state);
 }
 function onState(s){
   if(s.phase){ setPhaseUI(s.phase); syncTimer(s.msLeft); }
+  if(s.seats) renderSeats(s.seats);
   setNums(s.audience, s.votes);
   if(s.revealed && s.opinionA!=null) revealBar(s.opinionA, s.tally);
   else hideReveal(s.votes);
@@ -550,11 +639,18 @@ function sendChat(){
 }
 function onChat(m){
   const log=document.getElementById('chatlog');
-  const d=document.createElement('div'); d.className='cm '+(m.side==='A'?'a':m.side==='B'?'b':'');
-  const tag=m.side==='A'?'[A] ':m.side==='B'?'[B] ':'';
-  d.innerHTML=`<span class="n">${tag}${esc(m.nick)}</span> ${esc(m.text)}`;
+  const d=document.createElement('div');
+  const sideCls=m.side==='A'?'a':m.side==='B'?'b':'';
+  if(m.fighter){ // 선수 발언 — 강조 표시
+    d.className='cm fm '+sideCls;
+    d.innerHTML=`<span class="n">⚔ ${esc(m.nick)} [선수 ${m.fighter}]</span> ${esc(m.text)}`;
+  } else {
+    d.className='cm '+sideCls;
+    const tag=m.side==='A'?'[A편] ':m.side==='B'?'[B편] ':'';
+    d.innerHTML=`<span class="n">${tag}${esc(m.nick)}</span> ${esc(m.text)}`;
+  }
   log.appendChild(d); log.scrollTop=log.scrollHeight;
-  spawnDanmaku(m.text.slice(0,24));
+  spawnDanmaku((m.fighter?'⚔ ':'')+m.text.slice(0,24));
 }
 
 /* verdict */
