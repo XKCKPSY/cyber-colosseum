@@ -108,6 +108,20 @@
   .big-obar{height:10px;border-radius:99px;overflow:hidden;display:flex;background:var(--bg-dark)}
   .big-obar .oa{background:var(--a);transition:width .5s ease} .big-obar .ob{background:var(--b);transition:width .5s ease}
 
+  /* match header (phase + timer + numbers) */
+  .mhead{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+  .phase-pill{font-size:12px;font-weight:800;letter-spacing:.02em;padding:4px 11px;border-radius:99px;
+    background:var(--brand);color:#fff;white-space:nowrap}
+  .phase-pill.brk{background:var(--yellow);color:#1e1f22}
+  .phase-pill.end{background:var(--green);color:#fff}
+  .timer{font-size:20px;font-weight:800;color:var(--head);font-variant-numeric:tabular-nums;letter-spacing:.02em}
+  .timer.warn{color:var(--b-soft)}
+  .mnums{margin-left:auto;font-size:12.5px;color:var(--muted);font-weight:500}.mnums b{color:var(--head)}
+  .blind-note{text-align:center;font-size:12.5px;color:var(--dim);font-weight:500;padding:9px;background:var(--bg-dark);border-radius:8px}
+  .blind-note b{color:var(--yellow)}
+  .mid-banner{text-align:center;font-size:13px;font-weight:700;color:#1e1f22;background:var(--yellow);
+    padding:7px;border-radius:8px;margin-bottom:8px;animation:fade .4s}
+
   .floor{position:relative;height:190px;overflow:hidden;background:var(--floor);border-top:1px solid var(--line-soft);border-bottom:1px solid var(--line-soft)}
   .glads{display:flex;height:100%;align-items:center;justify-content:space-around;padding:0 30px}
   .glad{text-align:center;transition:transform .3s}
@@ -235,8 +249,17 @@
     <!-- live -->
     <div class="hidden" id="s-live">
       <div class="lbar">
-        <div class="lbl"><span class="la" id="lb-a">A 50%</span><span class="lb" id="lb-b">B 50%</span></div>
-        <div class="big-obar"><div class="oa" id="oa" style="width:50%"></div><div class="ob" id="ob" style="width:50%"></div></div>
+        <div class="mhead">
+          <span class="phase-pill" id="phasePill">1부</span>
+          <span class="timer" id="timer">10:00</span>
+          <span class="mnums"><b id="m-aud">0</b>명 관전 · 투표 <b id="m-votes">0</b></span>
+        </div>
+        <div id="midBanner" class="mid-banner hidden">⚖ 중간 결과 공개! · 2부에서 다시 뒤집을 수 있어요</div>
+        <div id="revealBox" class="hidden">
+          <div class="lbl"><span class="la" id="lb-a">A 50%</span><span class="lb" id="lb-b">B 50%</span></div>
+          <div class="big-obar"><div class="oa" id="oa" style="width:50%"></div><div class="ob" id="ob" style="width:50%"></div></div>
+        </div>
+        <div id="blindNote" class="blind-note">🔒 실시간 우세는 <b>비공개</b> · 중간 휴식 때 딱 한 번 공개돼요</div>
       </div>
       <div class="floor">
         <div class="glads">
@@ -247,7 +270,7 @@
       </div>
       <div class="ctrl">
         <div class="vote-title">당신의 판결</div>
-        <div class="vote-sub">아무 때나 바꿀 수 있어요 · 당신 표가 여론바를 움직입니다</div>
+        <div class="vote-sub">아무 때나 바꿀 수 있어요 · 우세는 중간·최종에만 공개됩니다</div>
         <div class="vote-row" id="voteRow">
           <button data-s="2" onclick="vote(this,2)">강하게 A</button>
           <button data-s="1" onclick="vote(this,1)">약하게 A</button>
@@ -255,7 +278,7 @@
           <button data-s="-1" onclick="vote(this,-1)">약하게 B</button>
           <button data-s="-2" onclick="vote(this,-2)">강하게 B</button>
         </div>
-        <div class="tally" id="tally"><span class="ta">A</span> <b>0</b> · 중립 <b>0</b> · <b>0</b> <span class="tb">B</span></div>
+        <div class="tally" id="tally">지금까지 <b>0</b>명이 판결에 참여 · 결과는 비공개</div>
 
         <div class="react">
           <div class="react-h">관중 반응 · 재미용이라 판결엔 영향 없어요</div>
@@ -282,7 +305,6 @@
             <button onclick="sendChat()">전송</button>
           </div>
         </div>
-        <button class="btn btn-danger close-btn" onclick="closeMatch()">판결 내리기</button>
       </div>
     </div>
 
@@ -326,10 +348,65 @@ function handle(m){
   if(m.type==='lobby') renderLobby(m.rooms);
   else if(m.type==='joined'){ cur=m.ring; showLive(m); }
   else if(m.type==='state') onState(m);
+  else if(m.type==='phase') onPhase(m);
   else if(m.type==='chat') onChat(m);
   else if(m.type==='verdict') onVerdict(m);
   else if(m.type==='created') onCreated(m);
   else if(m.type==='error') { const el=document.getElementById('cf-msg'); if(el) el.textContent=m.msg||'오류'; }
+}
+
+/* ---------- 경기 페이즈 / 타이머 ---------- */
+const phaseLabel={part1:'1부',break:'중간 휴식',part2:'2부',ended:'판결'};
+let curPhase='part1', matchEndAt=0;
+function fmtMs(ms){ const s=Math.max(0,Math.ceil(ms/1000)); return Math.floor(s/60)+':'+String(s%60).padStart(2,'0'); }
+function syncTimer(msLeft){ matchEndAt=Date.now()+(msLeft||0); updateTimer(); }
+function updateTimer(){
+  const el=document.getElementById('timer'); if(!el) return;
+  const ms=Math.max(0,matchEndAt-Date.now());
+  el.textContent=fmtMs(ms);
+  el.classList.toggle('warn',(curPhase==='part1'||curPhase==='part2')&&ms<=10000);
+}
+setInterval(updateTimer,250);
+function setPhaseUI(phase){
+  curPhase=phase;
+  const pill=document.getElementById('phasePill'); if(pill){ pill.textContent=phaseLabel[phase]||'진행';
+    pill.className='phase-pill'+(phase==='break'?' brk':phase==='ended'?' end':''); }
+  const brk=phase==='break';
+  document.getElementById('revealBox').classList.toggle('hidden',!brk);
+  document.getElementById('midBanner').classList.toggle('hidden',!brk);
+  const bn=document.getElementById('blindNote'); const live=(phase==='part1'||phase==='part2');
+  bn.classList.toggle('hidden',!live);
+  if(live) bn.innerHTML = phase==='part1'
+    ? '🔒 실시간 우세는 <b>비공개</b> · 중간 휴식 때 딱 한 번 공개돼요'
+    : '🔒 우세 다시 <b>비공개</b> · 최종 판결에서 공개돼요';
+}
+function setNums(aud,votes){
+  if(aud!=null){ document.getElementById('m-aud').textContent=(aud||0).toLocaleString();
+    document.getElementById('a-aud').textContent=(aud||0).toLocaleString(); }
+  if(votes!=null) document.getElementById('m-votes').textContent=(votes||0).toLocaleString();
+}
+function revealBar(a,tally){
+  document.getElementById('oa').style.width=a+'%';
+  document.getElementById('ob').style.width=(100-a)+'%';
+  document.getElementById('lb-a').textContent='A '+Math.round(a)+'%';
+  document.getElementById('lb-b').textContent='B '+Math.round(100-a)+'%';
+  if(tally) document.getElementById('tally').innerHTML=`<span class="ta">A</span> <b>${tally.a}</b> · 중립 <b>${tally.n}</b> · <b>${tally.b}</b> <span class="tb">B</span>`;
+}
+function hideReveal(votes){
+  document.getElementById('tally').innerHTML=`지금까지 <b>${(votes||0).toLocaleString()}</b>명이 판결에 참여 · 결과는 비공개`;
+}
+function onPhase(m){
+  if(m.phase==='part1'){ backToLiveFresh(); } // 새 경기 자동 시작
+  setNums(m.audience,m.votes);
+  setPhaseUI(m.phase);
+  syncTimer(m.msLeft);
+  if(m.phase==='break'&&m.opinionA!=null) revealBar(m.opinionA,m.tally);
+  else hideReveal(m.votes);
+}
+function backToLiveFresh(){
+  document.getElementById('s-verdict').classList.add('hidden');
+  document.getElementById('s-topic').classList.add('hidden');
+  document.getElementById('s-live').classList.remove('hidden');
 }
 
 /* ---------- create ring ---------- */
@@ -366,15 +443,21 @@ function renderLobby(rooms){
   const el=document.getElementById('rings'); el.innerHTML='';
   rooms.forEach(r=>{
     const d=document.createElement('div'); d.className='ring'; d.onclick=()=>openRoom(r);
-    d.innerHTML=`<div class="top"><span class="badge live"><span class="dot live pulse"></span>Live</span><span class="badge cat">${catShort[r.cat]||r.cat}</span></div>
+    const revealed = r.revealed && r.opinionA!=null;
+    const bar = revealed
+      ? `<div class="obar-l"><span class="la">A ${r.opinionA}%</span><span class="lb">${100-r.opinionA}% B</span></div>
+         <div class="obar"><div class="oa" style="width:${r.opinionA}%"></div><div class="ob" style="width:${100-r.opinionA}%"></div></div>`
+      : `<div class="obar-l"><span style="color:var(--dim)">🔒 우세 비공개</span><span style="color:var(--dim)">투표 ${(r.votes||0).toLocaleString()}</span></div>
+         <div class="obar"><div style="width:100%;background:var(--line)"></div></div>`;
+    const pl=phaseLabel[r.phase]||'진행';
+    d.innerHTML=`<div class="top"><span class="badge live"><span class="dot live pulse"></span>Live</span><span class="badge cat">${catShort[r.cat]||r.cat}</span><span class="badge cat">${pl}</span></div>
       <h3>${esc(r.topic)}</h3>
       <div class="fr">
         <div class="side a"><div class="avatar a">${esc(initial(r.a))}</div><div class="nm">${esc(r.a)}</div></div>
         <span class="vs">VS</span>
         <div class="side b"><div class="avatar b">${esc(initial(r.b))}</div><div class="nm">${esc(r.b)}</div></div>
       </div>
-      <div class="obar-l"><span class="la">A ${r.opinionA}%</span><span class="lb">${100-r.opinionA}% B</span></div>
-      <div class="obar"><div class="oa" style="width:${r.opinionA}%"></div><div class="ob" style="width:${100-r.opinionA}%"></div></div>
+      ${bar}
       <div class="meta"><span>👁 <b>${r.audience.toLocaleString()}</b> 관전</span><span>화력 <b>${r.heat}</b></span></div>`;
     el.appendChild(d);
   });
@@ -417,13 +500,10 @@ function showLive(m){
   onState(m.state);
 }
 function onState(s){
-  const a=s.opinionA;
-  document.getElementById('oa').style.width=a+'%';
-  document.getElementById('ob').style.width=(100-a)+'%';
-  document.getElementById('lb-a').textContent='A '+Math.round(a)+'%';
-  document.getElementById('lb-b').textContent='B '+Math.round(100-a)+'%';
-  document.getElementById('a-aud').textContent=(s.audience||0).toLocaleString();
-  if(s.tally){ document.getElementById('tally').innerHTML=`<span class="ta">A</span> <b>${s.tally.a}</b> · 중립 <b>${s.tally.n}</b> · <b>${s.tally.b}</b> <span class="tb">B</span>`; }
+  if(s.phase){ setPhaseUI(s.phase); syncTimer(s.msLeft); }
+  setNums(s.audience, s.votes);
+  if(s.revealed && s.opinionA!=null) revealBar(s.opinionA, s.tally);
+  else hideReveal(s.votes);
   document.getElementById('c-corn').textContent=(s.corn||0).toLocaleString();
   document.getElementById('c-rock').textContent=(s.rock||0).toLocaleString();
   document.getElementById('c-heat').textContent=(s.heat||0).toLocaleString();
@@ -478,7 +558,6 @@ function onChat(m){
 }
 
 /* verdict */
-function closeMatch(){ sendWs({type:'close'}); }
 function onVerdict(m){
   document.getElementById('s-live').classList.add('hidden');
   document.getElementById('s-verdict').classList.remove('hidden');
