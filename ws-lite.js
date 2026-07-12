@@ -6,13 +6,18 @@
 const crypto = require('crypto');
 const GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 
+const MAX_PAYLOAD = 16 * 1024;   // 메시지 1건 최대 16KB (초과 시 즉시 차단)
+const MAX_BUFFER  = 64 * 1024;   // 소켓당 수신 버퍼 상한 (도배/폭탄 방어)
+
 class Conn {
   constructor(socket) {
     this.socket = socket;
     this.readyState = 1; // OPEN
+    this.isAlive = true; // 하트비트 (pong 수신 시 true)
     this._handlers = { message: [], close: [] };
     this._buf = Buffer.alloc(0);
     this._frag = [];       // 연속 프레임(fragmentation) 조립용
+    this._fragLen = 0;
     this._fragOp = 0;
     socket.on('data', (d) => this._onData(d));
     socket.on('close', () => this._closed());
@@ -39,9 +44,12 @@ class Conn {
   }
 
   close() { try { this.socket.write(Buffer.from([0x88, 0x00])); this.socket.end(); } catch {} this._closed(); }
+  destroy() { try { this.socket.destroy(); } catch {} this._closed(); }
+  ping() { try { this.socket.write(Buffer.from([0x89, 0x00])); } catch { this._closed(); } }
 
   _onData(chunk) {
     this._buf = Buffer.concat([this._buf, chunk]);
+    if (this._buf.length > MAX_BUFFER) { this.destroy(); return; } // 버퍼 폭탄 방어
     // 가능한 만큼 프레임 파싱
     while (true) {
       if (this._buf.length < 2) return;
@@ -53,6 +61,7 @@ class Conn {
       let offset = 2;
       if (len === 126) { if (this._buf.length < 4) return; len = this._buf.readUInt16BE(2); offset = 4; }
       else if (len === 127) { if (this._buf.length < 10) return; len = Number(this._buf.readBigUInt64BE(2)); offset = 10; }
+      if (len > MAX_PAYLOAD) { this.destroy(); return; }           // 초대형 프레임 선언 → 즉시 차단
       let mask;
       if (masked) { if (this._buf.length < offset + 4) return; mask = this._buf.slice(offset, offset + 4); offset += 4; }
       if (this._buf.length < offset + len) return; // 아직 페이로드 덜 옴
@@ -62,14 +71,16 @@ class Conn {
 
       if (opcode === 0x8) { this.close(); return; }              // close
       else if (opcode === 0x9) { this._pong(payload); }          // ping → pong
-      else if (opcode === 0xA) { /* pong: 무시 */ }
+      else if (opcode === 0xA) { this.isAlive = true; }          // pong: 생존 신고
       else if (opcode === 0x1 || opcode === 0x2 || opcode === 0x0) {
         // 텍스트/바이너리/연속 프레임 조립
         if (opcode !== 0x0) this._fragOp = opcode;
         this._frag.push(payload);
+        this._fragLen += payload.length;
+        if (this._fragLen > MAX_PAYLOAD) { this.destroy(); return; } // 조각 폭탄 방어
         if (fin) {
           const full = Buffer.concat(this._frag);
-          this._frag = [];
+          this._frag = []; this._fragLen = 0;
           if (this._fragOp === 0x1) this._emit('message', full.toString('utf8'));
           this._fragOp = 0;
         }

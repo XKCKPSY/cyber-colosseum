@@ -47,11 +47,11 @@ const server = http.createServer((req, res) => {
 const stanceToPoints = (s) => ((s + 2) / 4) * 100;
 const sideOf = (s) => (s > 0 ? 'A' : s < 0 ? 'B' : 'N');
 
-function makeRoom(id, cat, topic, a, b, aClaim, bClaim) {
+function makeRoom(id, cat, topic, aClaim, bClaim) {
   return {
-    id, cat, topic,
-    fighterA: a, fighterB: b, aClaim, bClaim,
+    id, cat, topic, aClaim, bClaim,
     clients: new Set(),          // 이 방의 ws 집합 (= 실제 접속자)
+    seatA: null, seatB: null,    // 선수 자리 (ws 참조) — 비어 있으면 도전자 모집중
     // 경기 진행 상태
     phase: 'part1',              // part1 | break | part2 | ended
     phaseEndsAt: now() + PART1_MS,
@@ -61,7 +61,11 @@ function makeRoom(id, cat, topic, a, b, aClaim, bClaim) {
     // 이번 tick 동안 쌓인 반응 (스톰 연출용 → 브로드캐스트 후 비움)
     reactionBuf: [],
     dirty: true,
+    emptySince: null,            // 유저 방 자동 정리용
   };
+}
+function seatInfo(room) {
+  return { a: room.seatA ? room.seatA.nick : null, b: room.seatB ? room.seatB.nick : null };
 }
 // 라운드 중(part1/part2)에는 우세 비공개, 휴식/판결에만 공개
 function isRevealed(room) { return room.phase === 'break' || room.phase === 'ended'; }
@@ -70,10 +74,10 @@ function msLeftOf(room) { return Math.max(0, room.phaseEndsAt - now()); }
 
 const rooms = new Map();
 [
-  ['g1', 'game', '롤 듀오, 정글이 안 봐준 게 잘못 vs 라인전을 못 이긴 게 잘못', '정글탓_클리어', '라인전의정석', '정글이 안 봐준 게 잘못', '라인전을 못 이긴 게 잘못', 52, 8240],
-  ['l1', 'love', '기념일에 게임한 남친, 헤어질 사유 된다 vs 오버다', '현실주의연애', '낭만파', '헤어질 사유 된다', '그건 오버다', 48, 6110],
-  ['w1', 'work', '퇴근 후 업무 카톡, 무시해도 된다 vs 답은 해야 한다', '워라밸사수대', '조직생활만렙', '무시해도 된다', '답은 해야 한다', 57, 4300],
-  ['f1', 'life', '민트초코는 음식이다 vs 치약이다', '민초단_수호자', '반민초연합', '민초는 음식이다', '민초는 치약이다', 50, 3920],
+  ['g1', 'game', '롤 듀오, 정글이 안 봐준 게 잘못 vs 라인전을 못 이긴 게 잘못', '정글이 안 봐준 게 잘못', '라인전을 못 이긴 게 잘못'],
+  ['l1', 'love', '기념일에 게임한 남친, 헤어질 사유 된다 vs 오버다', '헤어질 사유 된다', '그건 오버다'],
+  ['w1', 'work', '퇴근 후 업무 카톡, 무시해도 된다 vs 답은 해야 한다', '무시해도 된다', '답은 해야 한다'],
+  ['f1', 'life', '민트초코는 음식이다 vs 치약이다', '민초는 음식이다', '민초는 치약이다'],
 ].forEach(r => rooms.set(r[0], makeRoom(...r)));
 
 /* ---------------- 여론/상태 계산 (전부 실제 접속자 기반) ---------------- */
@@ -105,6 +109,7 @@ function roomState(room) {
     part: partOf(room),
     msLeft: msLeftOf(room),
     revealed,
+    seats: seatInfo(room),         // 선수 자리 현황
     audience: room.clients.size,   // 실제 접속자 수 (항상 공개)
     votes: tally.voters,           // 총 투표 수 (항상 공개)
     corn: room.corn, rock: room.rock, heat: room.heat,
@@ -123,7 +128,7 @@ function lobbyPayload() {
       const revealed = isRevealed(r);
       const o = {
         id: r.id, cat: r.cat, topic: r.topic,
-        a: r.fighterA, b: r.fighterB, aClaim: r.aClaim, bClaim: r.bClaim,
+        seats: seatInfo(r), aClaim: r.aClaim, bClaim: r.bClaim,
         audience: r.clients.size, heat: r.heat,
         phase: r.phase, part: partOf(r), msLeft: msLeftOf(r), revealed,
         votes: voteTally(r).voters,
@@ -151,6 +156,10 @@ wsLite.attach(server, (ws) => {
   ws.stance = null;
   ws.stanceBefore = null;
   ws.isRealName = false;
+  // 어뷰징 방어용 타임스탬프
+  ws.lastChat = 0;
+  ws.lastCreate = 0;
+  ws.lastSeat = 0;
   allClients.add(ws);
 
   send(ws, lobbyPayload());
@@ -176,10 +185,37 @@ wsLite.attach(server, (ws) => {
         r.dirty = true;
         send(ws, {
           type: 'joined',
-          ring: { id: r.id, cat: r.cat, topic: r.topic, a: r.fighterA, b: r.fighterB, aClaim: r.aClaim, bClaim: r.bClaim, audience: r.clients.size },
+          you: ws.nick, // 내 닉네임 (선수 자리 표시용)
+          ring: { id: r.id, cat: r.cat, topic: r.topic, aClaim: r.aClaim, bClaim: r.bClaim, audience: r.clients.size },
           state: roomState(r),
         });
         if (r.phase === 'ended' && r.verdict) send(ws, r.verdict); // 판결 진행 중 입장 시 결과 표시
+        break;
+      }
+
+      case 'seat': { // 선수 참전/기권
+        if (!room) break;
+        const t = Date.now();
+        if (t - ws.lastSeat < 1000) break; // 자리 스팸 방지
+        ws.lastSeat = t;
+        if (m.side === 'none') { // 기권
+          let left = null;
+          if (room.seatA === ws) { room.seatA = null; left = 'A'; }
+          if (room.seatB === ws) { room.seatB = null; left = 'B'; }
+          if (left) { room.dirty = true; broadcast(room, { type: 'seat', side: left, nick: null }); }
+          break;
+        }
+        const side = m.side === 'A' ? 'A' : m.side === 'B' ? 'B' : null;
+        if (!side) break;
+        const key = side === 'A' ? 'seatA' : 'seatB';
+        if (room[key]) { send(ws, { type: 'error', msg: '이미 다른 선수가 있어요' }); break; }
+        // 반대편에 앉아 있었으면 그 자리는 비움
+        if (room.seatA === ws) { room.seatA = null; broadcast(room, { type: 'seat', side: 'A', nick: null }); }
+        if (room.seatB === ws) { room.seatB = null; broadcast(room, { type: 'seat', side: 'B', nick: null }); }
+        room[key] = ws;
+        room.dirty = true;
+        broadcast(room, { type: 'seat', side, nick: ws.nick });
+        broadcastAll(lobbyPayload()); // 로비 카드의 선수 현황 갱신
         break;
       }
 
@@ -194,29 +230,41 @@ wsLite.attach(server, (ws) => {
         const side = m.side === 'A' || m.side === 'B' ? m.side : 'A';
         room.corn += corn; room.rock += rock;
         room.heat += corn + rock * 2;
-        if (corn) room.reactionBuf.push({ side, type: 'corn', n: corn });
-        if (rock) room.reactionBuf.push({ side, type: 'rock', n: rock });
+        if (room.reactionBuf.length < 200) { // 연출 버퍼 상한 (대량 도배 방어)
+          if (corn) room.reactionBuf.push({ side, type: 'corn', n: corn });
+          if (rock) room.reactionBuf.push({ side, type: 'rock', n: rock });
+        }
         room.dirty = true;
         break;
       }
 
-      case 'chat': { // 링 안 발언 (A/B 진영 지지 발언)
+      case 'chat': { // 링 안 발언 — 선수면 선수 발언, 아니면 관중 응원/관전평
         if (!room) break;
+        const t = Date.now();
+        if (t - ws.lastChat < 600) break; // 도배 방지 (0.6초당 1건)
         const text = String(m.text || '').slice(0, 200);
-        const side = m.side === 'A' || m.side === 'B' ? m.side : 'N';
-        if (text.trim()) broadcast(room, { type: 'chat', side, nick: ws.nick, text });
+        if (!text.trim()) break;
+        ws.lastChat = t;
+        let side, fighter = null;
+        if (room.seatA === ws) { side = 'A'; fighter = 'A'; }
+        else if (room.seatB === ws) { side = 'B'; fighter = 'B'; }
+        else side = m.side === 'A' || m.side === 'B' ? m.side : 'N';
+        broadcast(room, { type: 'chat', side, fighter, nick: ws.nick, text });
         break;
       }
 
       case 'createRing': { // 유저가 새 방 개설
+        const t = Date.now();
+        if (t - ws.lastCreate < 30000) { send(ws, { type: 'error', msg: '방 개설은 30초에 한 번만 가능해요' }); break; }
         const topic = String(m.topic || '').slice(0, 120).trim();
         if (!topic) { send(ws, { type: 'error', msg: '논점을 입력하세요' }); break; }
         if (rooms.size >= 60) { send(ws, { type: 'error', msg: '방이 너무 많아요. 잠시 후 다시 시도하세요' }); break; }
+        ws.lastCreate = t;
         const cat = ['game', 'love', 'work', 'life'].includes(m.cat) ? m.cat : 'life';
         const aClaim = String(m.aClaim || '').slice(0, 60).trim() || 'A 입장';
         const bClaim = String(m.bClaim || '').slice(0, 60).trim() || 'B 입장';
         const id = 'u' + (nextRoomId++);
-        rooms.set(id, makeRoom(id, cat, topic, aClaim, bClaim, aClaim, bClaim));
+        rooms.set(id, makeRoom(id, cat, topic, aClaim, bClaim));
         broadcastAll(lobbyPayload());        // 모두의 로비에 새 방 표시
         send(ws, { type: 'created', ringId: id });
         break;
@@ -236,7 +284,13 @@ function clampStance(s) { s = s | 0; return s < -2 ? -2 : s > 2 ? 2 : s; }
 function leaveRoom(ws) {
   if (!ws.room) return;
   const r = rooms.get(ws.room);
-  if (r) { r.clients.delete(ws); r.dirty = true; }
+  if (r) {
+    r.clients.delete(ws);
+    // 선수가 나가면 자리 비움 + 모두에게 알림
+    if (r.seatA === ws) { r.seatA = null; broadcast(r, { type: 'seat', side: 'A', nick: null }); }
+    if (r.seatB === ws) { r.seatB = null; broadcast(r, { type: 'seat', side: 'B', nick: null }); }
+    r.dirty = true;
+  }
   ws.room = null;
 }
 
@@ -317,13 +371,32 @@ function advancePhase(room, t) {
   broadcastAll(lobbyPayload()); // 로비 카드(페이즈/우세)도 갱신
 }
 
-/* ---------------- MATCH TICK: 페이즈 전환 ---------------- */
+/* ---------------- MATCH TICK: 페이즈 전환 + 빈 유저방 정리 ---------------- */
+const EMPTY_ROOM_TTL = 10 * 60 * 1000; // 유저 방이 10분간 비면 자동 삭제
 setInterval(() => {
   const t = now();
+  let lobbyChanged = false;
   for (const room of rooms.values()) {
     if (t >= room.phaseEndsAt) advancePhase(room, t);
+    // 유저가 만든 방(u*)만 정리 대상. 기본 방 4개는 유지.
+    if (room.id[0] === 'u') {
+      if (room.clients.size === 0) {
+        if (room.emptySince == null) room.emptySince = t;
+        else if (t - room.emptySince > EMPTY_ROOM_TTL) { rooms.delete(room.id); lobbyChanged = true; }
+      } else room.emptySince = null;
+    }
   }
+  if (lobbyChanged) broadcastAll(lobbyPayload());
 }, MATCH_TICK);
+
+/* ---------------- 하트비트: 죽은 소켓 정리 (유령 관중 방지) ---------------- */
+setInterval(() => {
+  for (const ws of allClients) {
+    if (!ws.isAlive) { leaveRoom(ws); allClients.delete(ws); ws.destroy(); continue; }
+    ws.isAlive = false;
+    ws.ping();
+  }
+}, 30000);
 
 /* ---------------- TICK: 집계 브로드캐스트 ---------------- */
 setInterval(() => {
