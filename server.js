@@ -17,6 +17,17 @@ const wsLite = require('./ws-lite'); // 의존성 0 — 내장 모듈만 사용
 const PORT = process.env.PORT || 3000;
 const TICK_MS = 400; // 상태 브로드캐스트 주기 (집계)
 
+/* ---------------- 매치(경기) 진행 시간 ----------------
+ * 1부 → 중간 휴식(우세 1회 공개) → 2부 → 판결 → (쿨다운 후) 자동 재시작
+ * 기본값 = 운영용(1부 10분·2부 10분). 로컬 테스트는 환경변수로 짧게 override.
+ */
+const PART1_MS   = +process.env.PART1_MS   || 10 * 60 * 1000; // 1부 10분
+const BREAK_MS   = +process.env.BREAK_MS   || 60 * 1000;      // 중간 휴식 60초 (우세 공개)
+const PART2_MS   = +process.env.PART2_MS   || 10 * 60 * 1000; // 2부 10분
+const COOLDOWN_MS= +process.env.COOLDOWN_MS|| 20 * 1000;      // 판결 후 20초 뒤 새 경기
+const MATCH_TICK = 1000; // 경기 페이즈 점검 주기
+const now = () => Date.now();
+
 /* ---------------- 정적 파일 서버 ---------------- */
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml' };
 const server = http.createServer((req, res) => {
@@ -40,16 +51,22 @@ function makeRoom(id, cat, topic, a, b, aClaim, bClaim) {
   return {
     id, cat, topic,
     fighterA: a, fighterB: b, aClaim, bClaim,
-    status: 'live',
     clients: new Set(),          // 이 방의 ws 집합 (= 실제 접속자)
+    // 경기 진행 상태
+    phase: 'part1',              // part1 | break | part2 | ended
+    phaseEndsAt: now() + PART1_MS,
+    verdict: null,               // 판결 결과 스냅샷 (ended 동안 신규 입장자에게 전송)
     // 집계 카운터
     corn: 0, rock: 0, heat: 0,
     // 이번 tick 동안 쌓인 반응 (스톰 연출용 → 브로드캐스트 후 비움)
     reactionBuf: [],
     dirty: true,
-    ended: false,
   };
 }
+// 라운드 중(part1/part2)에는 우세 비공개, 휴식/판결에만 공개
+function isRevealed(room) { return room.phase === 'break' || room.phase === 'ended'; }
+function partOf(room) { return room.phase === 'part2' ? 2 : 1; }
+function msLeftOf(room) { return Math.max(0, room.phaseEndsAt - now()); }
 
 const rooms = new Map();
 [
@@ -79,26 +96,41 @@ function voteTally(room) {
   return { a, b, n, voters };
 }
 function roomState(room) {
-  return {
+  const tally = voteTally(room);
+  const revealed = isRevealed(room);
+  const s = {
     type: 'state',
     ringId: room.id,
-    opinionA: Math.round(computeOpinionA(room) * 10) / 10,
+    phase: room.phase,
+    part: partOf(room),
+    msLeft: msLeftOf(room),
+    revealed,
+    audience: room.clients.size,   // 실제 접속자 수 (항상 공개)
+    votes: tally.voters,           // 총 투표 수 (항상 공개)
     corn: room.corn, rock: room.rock, heat: room.heat,
-    audience: room.clients.size,   // 실제 접속자 수
-    tally: voteTally(room),        // 실제 표
     reactions: room.reactionBuf,   // [{side, type, n}]
   };
+  if (revealed) {                  // 우세는 휴식/판결에만 공개
+    s.opinionA = Math.round(computeOpinionA(room) * 10) / 10;
+    s.tally = tally;               // A/중립/B 세부 표
+  }
+  return s;
 }
 function lobbyPayload() {
   return {
     type: 'lobby',
-    rooms: [...rooms.values()].map(r => ({
-      id: r.id, cat: r.cat, topic: r.topic,
-      a: r.fighterA, b: r.fighterB, aClaim: r.aClaim, bClaim: r.bClaim,
-      audience: r.clients.size,   // 실제 접속자 수
-      heat: r.heat, opinionA: Math.round(computeOpinionA(r)),
-      status: r.status,
-    })),
+    rooms: [...rooms.values()].map(r => {
+      const revealed = isRevealed(r);
+      const o = {
+        id: r.id, cat: r.cat, topic: r.topic,
+        a: r.fighterA, b: r.fighterB, aClaim: r.aClaim, bClaim: r.bClaim,
+        audience: r.clients.size, heat: r.heat,
+        phase: r.phase, part: partOf(r), msLeft: msLeftOf(r), revealed,
+        votes: voteTally(r).voters,
+      };
+      if (revealed) o.opinionA = Math.round(computeOpinionA(r));
+      return o;
+    }),
   };
 }
 
@@ -147,6 +179,7 @@ wsLite.attach(server, (ws) => {
           ring: { id: r.id, cat: r.cat, topic: r.topic, a: r.fighterA, b: r.fighterB, aClaim: r.aClaim, bClaim: r.bClaim, audience: r.clients.size },
           state: roomState(r),
         });
+        if (r.phase === 'ended' && r.verdict) send(ws, r.verdict); // 판결 진행 중 입장 시 결과 표시
         break;
       }
 
@@ -172,12 +205,6 @@ wsLite.attach(server, (ws) => {
         const text = String(m.text || '').slice(0, 200);
         const side = m.side === 'A' || m.side === 'B' ? m.side : 'N';
         if (text.trim()) broadcast(room, { type: 'chat', side, nick: ws.nick, text });
-        break;
-      }
-
-      case 'close': { // 판결 (누구나 트리거 — MVP)
-        if (!room || room.ended) break;
-        endMatch(room);
         break;
       }
 
@@ -215,7 +242,6 @@ function leaveRoom(ws) {
 
 /* ---------------- 판결 ---------------- */
 function endMatch(room) {
-  room.ended = true; room.status = 'ended';
   const tally = voteTally(room);
   const opinionA = computeOpinionA(room);
   const aWin = opinionA >= 50;
@@ -237,19 +263,67 @@ function endMatch(room) {
     }
   }
 
-  broadcast(room, {
+  room.verdict = {
     type: 'verdict',
+    ringId: room.id,
     winner: aWin ? room.aClaim : room.bClaim,
     winSide: aWin ? 'A' : 'B',
     totalA: Math.round(opinionA), totalB: Math.round(100 - opinionA),
     totalN, tally,
     realA, realB: realA == null ? null : 100 - realA, realN: realCount,
     changed: bToA + aToB, bToA, aToB,
-  });
-
-  // 재사용을 위해 잠시 후 리셋
-  setTimeout(() => { room.ended = false; room.status = 'live'; room.corn = room.rock = room.heat = 0; }, 8000);
+  };
+  broadcast(room, room.verdict);
 }
+
+/* ---------------- 경기 페이즈 이벤트 ---------------- */
+function phaseEvent(room) {
+  const tally = voteTally(room);
+  const e = {
+    type: 'phase',
+    ringId: room.id,
+    phase: room.phase,
+    part: partOf(room),
+    msLeft: msLeftOf(room),
+    audience: room.clients.size,
+    votes: tally.voters,
+  };
+  if (room.phase === 'break') {   // 중간 우세 공개
+    e.opinionA = Math.round(computeOpinionA(room) * 10) / 10;
+    e.tally = tally;
+  }
+  return e;
+}
+function startPart1(room, t) {
+  room.phase = 'part1'; room.phaseEndsAt = t + PART1_MS;
+  room.corn = room.rock = room.heat = 0; room.verdict = null; room.reactionBuf = [];
+  // 새 경기: 델타 기준을 현재 입장으로 리셋 (이번 판에서 바뀐 마음만 집계)
+  for (const ws of room.clients) ws.stanceBefore = ws.stance;
+}
+/* 한 페이즈가 끝나면 다음 단계로 */
+function advancePhase(room, t) {
+  if (room.phase === 'part1') {
+    room.phase = 'break'; room.phaseEndsAt = t + BREAK_MS;   // 중간 휴식 + 우세 공개
+  } else if (room.phase === 'break') {
+    room.phase = 'part2'; room.phaseEndsAt = t + PART2_MS;   // 2부 (우세 다시 숨김)
+  } else if (room.phase === 'part2') {
+    room.phase = 'ended'; room.phaseEndsAt = t + COOLDOWN_MS; // 판결
+    endMatch(room);
+  } else { // ended → 새 경기 자동 시작
+    startPart1(room, t);
+  }
+  room.dirty = true;
+  if (room.phase !== 'ended') broadcast(room, phaseEvent(room)); // 판결은 endMatch가 이미 전송
+  broadcastAll(lobbyPayload()); // 로비 카드(페이즈/우세)도 갱신
+}
+
+/* ---------------- MATCH TICK: 페이즈 전환 ---------------- */
+setInterval(() => {
+  const t = now();
+  for (const room of rooms.values()) {
+    if (t >= room.phaseEndsAt) advancePhase(room, t);
+  }
+}, MATCH_TICK);
 
 /* ---------------- TICK: 집계 브로드캐스트 ---------------- */
 setInterval(() => {
