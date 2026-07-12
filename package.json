@@ -1,0 +1,11 @@
+{
+  "name": "cyber-colosseum",
+  "version": "1.0.0",
+  "description": "사이버 투기장 — 실시간 키배 판결 플랫폼 MVP",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {}
+}
