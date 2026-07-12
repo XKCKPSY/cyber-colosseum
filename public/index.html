@@ -37,7 +37,15 @@
   .wrap{max-width:960px;margin:0 auto;padding:24px 18px 80px}
 
   /* lobby */
+  .lhead{display:flex;justify-content:space-between;align-items:flex-end;gap:12px}
   .lhead h2{font-size:20px}.lhead p{margin:4px 0 0;color:var(--dim);font-size:13px}
+  .cf{margin-bottom:14px}
+  .cf label{display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px}
+  .cf input,.cf select{width:100%;background:var(--input);border:none;color:var(--text);border-radius:8px;padding:10px;font-size:14px;font-family:inherit}
+  .cf input::placeholder{color:var(--dim)}
+  .cf input:focus,.cf select:focus{outline:1px solid var(--brand)}
+  .cf-two{display:flex;gap:10px}.cf-two .cf{flex:1}
+  #cf-msg{text-align:center;margin-top:10px;font-size:13px;color:var(--b-soft);min-height:16px}
   .rings{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:20px}
   .ring{background:var(--card);border-radius:8px;padding:16px;cursor:pointer;transition:background .12s}
   .ring:hover{background:var(--card-hover)}
@@ -170,8 +178,28 @@
 
 <!-- LOBBY -->
 <div class="wrap" id="v-lobby">
-  <div class="lhead"><h2>투기장 로비</h2><p>진행 중인 링에 입장하세요 · 다른 사람과 실시간으로 연결됩니다</p></div>
+  <div class="lhead">
+    <div><h2>투기장 로비</h2><p>진행 중인 링에 입장하세요 · 다른 사람과 실시간으로 연결됩니다</p></div>
+    <button class="btn btn-primary" onclick="showCreate()">+ 새 링 개설</button>
+  </div>
   <div class="rings" id="rings"></div>
+</div>
+
+<!-- CREATE -->
+<div class="wrap hidden" id="v-create">
+  <div class="stage" style="max-width:560px">
+    <div class="stopbar"><button class="back" onclick="goLobby()">← 로비</button><span class="cat">새 링 개설</span></div>
+    <div style="padding:24px">
+      <div class="cf"><label>논점 (한 줄)</label><input id="cf-topic" maxlength="120" placeholder="예: 탕수육은 부먹이다 vs 찍먹이다"></div>
+      <div class="cf-two">
+        <div class="cf"><label>A 입장</label><input id="cf-a" maxlength="60" placeholder="부먹"></div>
+        <div class="cf"><label>B 입장</label><input id="cf-b" maxlength="60" placeholder="찍먹"></div>
+      </div>
+      <div class="cf"><label>카테고리</label><select id="cf-cat"><option value="game">게임</option><option value="love">연애</option><option value="work">직장</option><option value="life" selected>일상</option></select></div>
+      <button class="btn btn-primary" style="width:100%;margin-top:18px" onclick="submitCreate()">개설하고 입장</button>
+      <div id="cf-msg"></div>
+    </div>
+  </div>
 </div>
 
 <!-- ARENA -->
@@ -300,16 +328,41 @@ function handle(m){
   else if(m.type==='state') onState(m);
   else if(m.type==='chat') onChat(m);
   else if(m.type==='verdict') onVerdict(m);
+  else if(m.type==='created') onCreated(m);
+  else if(m.type==='error') { const el=document.getElementById('cf-msg'); if(el) el.textContent=m.msg||'오류'; }
+}
+
+/* ---------- create ring ---------- */
+function showCreate(){
+  document.getElementById('v-lobby').classList.add('hidden');
+  document.getElementById('v-arena').classList.add('hidden');
+  document.getElementById('v-create').classList.remove('hidden');
+  document.getElementById('cf-msg').textContent='';
+}
+function submitCreate(){
+  const topic=document.getElementById('cf-topic').value.trim();
+  if(!topic){ document.getElementById('cf-msg').textContent='논점을 입력하세요'; return; }
+  sendWs({type:'createRing', topic,
+    aClaim:document.getElementById('cf-a').value.trim(),
+    bClaim:document.getElementById('cf-b').value.trim(),
+    cat:document.getElementById('cf-cat').value});
+}
+function onCreated(m){
+  const r=(window.__lastRooms||[]).find(x=>x.id===m.ringId);
+  document.getElementById('cf-topic').value=''; document.getElementById('cf-a').value=''; document.getElementById('cf-b').value='';
+  if(r) openRoom(r); else goLobby();
 }
 
 /* ---------- lobby ---------- */
 function goLobby(){
   document.getElementById('v-arena').classList.add('hidden');
+  document.getElementById('v-create').classList.add('hidden');
   document.getElementById('v-lobby').classList.remove('hidden');
   setConn(wsReady?'ok':'', wsReady?'연결됨':'연결 중');
   sendWs({type:'leave'});
 }
 function renderLobby(rooms){
+  window.__lastRooms = rooms;
   const el=document.getElementById('rings'); el.innerHTML='';
   rooms.forEach(r=>{
     const d=document.createElement('div'); d.className='ring'; d.onclick=()=>openRoom(r);
@@ -331,6 +384,7 @@ function renderLobby(rooms){
 function openRoom(r){
   cur=r; myStance=null; myVote=null;
   document.getElementById('v-lobby').classList.add('hidden');
+  document.getElementById('v-create').classList.add('hidden');
   document.getElementById('v-arena').classList.remove('hidden');
   document.getElementById('s-topic').classList.remove('hidden');
   document.getElementById('s-live').classList.add('hidden');
