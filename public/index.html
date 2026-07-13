@@ -172,7 +172,15 @@
 
   .chatbox{margin-top:16px;background:var(--bg-dark);border-radius:8px;padding:10px}
   .chatlog{height:100px;overflow-y:auto;font-size:13.5px;display:flex;flex-direction:column;gap:4px;margin-bottom:8px}
-  .cm{line-height:1.45;color:var(--text)}.cm .n{font-weight:600}.cm.a .n{color:var(--a-soft)}.cm.b .n{color:var(--b-soft)}.cm .n{color:var(--muted)}
+  .cm{line-height:1.45;color:var(--text);position:relative;padding-right:22px}
+  .cm .n{font-weight:600}.cm.a .n{color:var(--a-soft)}.cm.b .n{color:var(--b-soft)}.cm .n{color:var(--muted)}
+  /* 신고 · 블라인드 */
+  .cm .rp{position:absolute;right:0;top:1px;background:none;font-size:11px;opacity:0;transition:.12s;padding:1px 3px;border-radius:4px}
+  .cm:hover .rp{opacity:.55}.cm .rp:hover{opacity:1;background:var(--input)}
+  .cm.bl .body,.cm.bl .n{display:none}
+  .cm.bl::before{content:'🚫 신고 누적으로 가려진 메시지 — 탭해서 보기';color:var(--dim);font-size:12px;cursor:pointer}
+  .cm.bl.show .body,.cm.bl.show .n{display:inline}
+  .cm.bl.show::before{content:'🚫 '}
   /* 선수 발언 — 눈에 확 띄게 */
   .cm.fm{padding:6px 9px;border-radius:8px;margin:2px 0}
   .cm.fm.a{background:rgba(88,101,242,.14);border-left:3px solid var(--a)}
@@ -205,6 +213,21 @@
   .share-btn{background:none;color:var(--muted);font-size:12.5px;font-weight:600;padding:4px 8px;border-radius:4px}
   .share-btn:hover{color:var(--head);background:var(--bg-dark)}
   .recruit{color:var(--yellow);font-weight:700}
+  .badge.hot{background:rgba(240,177,50,.16);color:var(--yellow)}
+  /* 내 전적 (상단) */
+  .me{font-size:12px;color:var(--muted);font-weight:600;background:var(--bg-alt);padding:4px 10px;border-radius:99px;white-space:nowrap}
+  .me b{color:var(--head)}
+  /* 로비 최근 판결 */
+  .vh{margin:34px 0 10px;font-size:15px;font-weight:700;color:var(--head)}
+  .vlist{display:flex;flex-direction:column;gap:7px}
+  .vrow{background:var(--card);border-radius:8px;padding:11px 14px;display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;transition:background .12s}
+  .vrow:hover{background:var(--card-hover)}
+  .vrow .vt{flex:1;color:var(--text);min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .vrow .vw{font-weight:700;color:var(--head);white-space:nowrap}.vrow .vw .pct{color:var(--brand)}
+  .vrow .vn{color:var(--dim);font-size:12px;white-space:nowrap}
+  /* 판결 복사 */
+  .copy-btn{margin-left:8px}
+  .steps{margin-top:6px;font-size:12px;color:var(--dim)}
   @media(max-width:720px){.rings{grid-template-columns:1fr}}
   /* 모바일 (커뮤니티 유입 대부분이 폰) */
   @media(max-width:560px){
@@ -227,16 +250,24 @@
 <body>
 <nav>
   <div class="brand" onclick="goLobby()"><span class="logo">C</span> 사이버 투기장</div>
-  <div class="conn"><span class="dot" id="cdot"></span><span id="cstat">연결 중</span></div>
+  <div class="conn"><span class="me hidden" id="me"></span><span class="dot" id="cdot"></span><span id="cstat">연결 중</span></div>
 </nav>
 
 <!-- LOBBY -->
 <div class="wrap" id="v-lobby">
   <div class="lhead">
-    <div><h2>투기장 로비</h2><p>진행 중인 링에 입장하세요 · 다른 사람과 실시간으로 연결됩니다</p></div>
+    <div>
+      <h2>투기장 로비</h2>
+      <p>싸움 구경하고, 팝콘 던지고, 판결을 내려라 — <b style="color:var(--head)">당신이 배심원입니다</b></p>
+      <div class="steps">① 입장 전 내 입장 선택 → ② 실시간 관전·응원 → ③ 중간·최종 판결 공개</div>
+    </div>
     <button class="btn btn-primary" onclick="showCreate()">+ 새 링 개설</button>
   </div>
   <div class="rings" id="rings"></div>
+  <div id="vsec" class="hidden">
+    <div class="vh">⚖ 최근 판결</div>
+    <div class="vlist" id="vlist"></div>
+  </div>
 </div>
 
 <!-- CREATE -->
@@ -322,20 +353,18 @@
         <div class="tally" id="tally">지금까지 <b>0</b>명이 판결에 참여 · 결과는 비공개</div>
 
         <div class="react">
-          <div class="react-h">관중 반응 · 재미용이라 판결엔 영향 없어요</div>
+          <div class="react-h">관중 반응 · 재미용이라 판결엔 영향 없어요 · 🍿 응원 🪨 야유</div>
           <div class="throws">
             <div class="tg a"><span class="gl">A에게</span><div class="bs">
               <button class="rbtn" onclick="throwAt('A','corn')">🍿</button>
               <button class="rbtn" onclick="throwAt('A','rock')">🪨</button>
-              <button class="rbtn" onclick="throwAt('A','clap')">👏</button>
             </div></div>
             <div class="tg b"><span class="gl">B에게</span><div class="bs">
               <button class="rbtn" onclick="throwAt('B','corn')">🍿</button>
               <button class="rbtn" onclick="throwAt('B','rock')">🪨</button>
-              <button class="rbtn" onclick="throwAt('B','clap')">👏</button>
             </div></div>
           </div>
-          <div class="heat">🍿 <b id="c-corn">0</b> · 🪨 <b id="c-rock">0</b> · 총 화력 <b id="c-heat">0</b></div>
+          <div class="heat">🍿 <b id="c-corn">0</b> · 🪨 <b id="c-rock">0</b></div>
         </div>
 
         <div class="chatbox">
@@ -361,7 +390,10 @@
         <div class="dbox"><div class="dl">이 판이 바꾼 마음</div><div class="dbig" id="v-dbig"></div><div class="dsub" id="v-dsub"></div></div>
         <div class="yc" id="v-yc"></div>
       </div>
-      <div class="vact"><button class="btn btn-primary" onclick="goLobby()">다른 링 보기</button></div>
+      <div class="vact">
+        <button class="btn btn-primary" onclick="goLobby()">다른 링 보기</button>
+        <button class="btn btn-ghost copy-btn" id="copyBtn" onclick="copyVerdict()">📋 결과 복사해서 자랑하기</button>
+      </div>
     </div>
 
   </div>
@@ -373,7 +405,9 @@ let ws, wsReady=false, reconnectT=null;
 function connect(){
   const proto = location.protocol==='https:'?'wss':'ws';
   ws = new WebSocket(proto+'://'+location.host);
-  ws.onopen=()=>{ wsReady=true; setConn('ok','연결됨'); };
+  ws.onopen=()=>{ wsReady=true; setConn('ok','연결됨');
+    const sn=localStorage.getItem('cc_nick'); if(sn) sendWs({type:'hello',nick:sn}); // 저장된 닉으로 접속
+  };
   ws.onclose=()=>{ wsReady=false; setConn('','재연결 중'); clearTimeout(reconnectT); reconnectT=setTimeout(connect,1500); };
   ws.onerror=()=>{};
   ws.onmessage=(e)=>{ let m; try{m=JSON.parse(e.data)}catch{return} handle(m); };
@@ -386,15 +420,37 @@ const catShort={game:'게임',love:'연애',work:'직장',life:'일상'};
 function initial(nm){ return (nm||'?').trim().charAt(0).toUpperCase(); }
 
 function handle(m){
-  if(m.type==='lobby') renderLobby(m.rooms);
-  else if(m.type==='joined'){ cur=m.ring; myNick=m.you; showLive(m); }
+  if(m.type==='lobby') renderLobby(m.rooms, m.recentVerdicts);
+  else if(m.type==='joined'){ cur=m.ring; setNick(m.you); showLive(m); }
+  else if(m.type==='hello'){ setNick(m.you); }
   else if(m.type==='state') onState(m);
   else if(m.type==='phase') onPhase(m);
   else if(m.type==='chat') onChat(m);
   else if(m.type==='seat') onSeat(m);
+  else if(m.type==='blind') onBlind(m);
   else if(m.type==='verdict') onVerdict(m);
   else if(m.type==='created') onCreated(m);
   else if(m.type==='error') { const el=document.getElementById('cf-msg'); if(el) el.textContent=m.msg||'오류'; }
+}
+
+/* ---------- 익명 전적 (브라우저에 저장) ---------- */
+let stats;
+try{ stats=JSON.parse(localStorage.getItem('cc_stats'))||{}; }catch{ stats={}; }
+stats.games=stats.games||0; stats.correct=stats.correct||0; stats.fights=stats.fights||0; stats.fightWins=stats.fightWins||0;
+function saveStats(){ try{ localStorage.setItem('cc_stats',JSON.stringify(stats)); }catch{} }
+function setNick(n){
+  if(!n) return;
+  myNick=n;
+  try{ localStorage.setItem('cc_nick',n); }catch{}
+  updateMe();
+}
+function updateMe(){
+  const el=document.getElementById('me'); if(!el) return;
+  if(!myNick){ el.classList.add('hidden'); return; }
+  let t='🎖 '+myNick;
+  if(stats.games>0) t+=` · 적중 <b>${stats.correct}/${stats.games}</b>`;
+  if(stats.fights>0) t+=` · 참전 <b>${stats.fightWins}승 ${stats.fights-stats.fightWins}패</b>`;
+  el.innerHTML=t; el.classList.remove('hidden');
 }
 
 /* ---------- 선수 자리 ---------- */
@@ -518,8 +574,9 @@ function goLobby(){
   mySeat=null;
   sendWs({type:'leave'});
 }
-function renderLobby(rooms){
+function renderLobby(rooms, recentVerdicts){
   window.__lastRooms = rooms;
+  const maxAud = Math.max(0, ...rooms.map(r=>r.audience||0)); // HOT 배지 기준
   // 딥링크: /#방id 로 들어온 경우 해당 링 바로 열기 — 최초 로비 수신 1회만 (커뮤니티 공유 유입)
   const firstLobby=!window.__gotLobby; window.__gotLobby=true;
   if(firstLobby && location.hash.length>1){
@@ -537,9 +594,10 @@ function renderLobby(rooms){
          <div class="obar"><div style="width:100%;background:var(--line)"></div></div>`;
     const pl=phaseLabel[r.phase]||'진행';
     const sa=r.seats&&r.seats.a, sb=r.seats&&r.seats.b;
+    const hot=(r.audience>0&&r.audience===maxAud)?'<span class="badge hot">🔥 HOT</span>':'';
     const nmA=sa?`<div class="nm">${esc(sa)}</div>`:`<div class="nm recruit">도전자 모집중</div>`;
     const nmB=sb?`<div class="nm">${esc(sb)}</div>`:`<div class="nm recruit">도전자 모집중</div>`;
-    d.innerHTML=`<div class="top"><span class="badge live"><span class="dot live pulse"></span>Live</span><span class="badge cat">${catShort[r.cat]||r.cat}</span><span class="badge cat">${pl}</span></div>
+    d.innerHTML=`<div class="top"><span class="badge live"><span class="dot live pulse"></span>Live</span><span class="badge cat">${catShort[r.cat]||r.cat}</span><span class="badge cat">${pl}</span>${hot}</div>
       <h3>${esc(r.topic)}</h3>
       <div class="fr">
         <div class="side a"><div class="avatar a">${sa?esc(initial(sa)):'?'}</div>${nmA}</div>
@@ -547,7 +605,21 @@ function renderLobby(rooms){
         <div class="side b"><div class="avatar b">${sb?esc(initial(sb)):'?'}</div>${nmB}</div>
       </div>
       ${bar}
-      <div class="meta"><span>👁 <b>${r.audience.toLocaleString()}</b> 관전</span><span>화력 <b>${r.heat}</b></span></div>`;
+      <div class="meta"><span>👁 <b>${r.audience.toLocaleString()}</b> 관전</span><span>🗳 <b>${(r.votes||0).toLocaleString()}</b> 투표</span></div>`;
+    el.appendChild(d);
+  });
+  renderVerdictLog(recentVerdicts);
+}
+function renderVerdictLog(list){
+  const sec=document.getElementById('vsec'), el=document.getElementById('vlist');
+  if(!list||!list.length){ sec.classList.add('hidden'); return; }
+  sec.classList.remove('hidden'); el.innerHTML='';
+  list.forEach(v=>{
+    const d=document.createElement('div'); d.className='vrow';
+    d.onclick=()=>{ const r=(window.__lastRooms||[]).find(x=>x.id===v.ringId); if(r) openRoom(r); };
+    d.innerHTML=`<span class="vt">${esc(v.topic)}</span>
+      <span class="vw">🏆 ${esc(v.winner)} <span class="pct">${v.winSide==='A'?v.totalA:v.totalB}%</span></span>
+      <span class="vn">배심원 ${v.totalN}명${v.changed>0?' · 마음 바뀜 '+v.changed:''}</span>`;
     el.appendChild(d);
   });
 }
@@ -595,7 +667,6 @@ function onState(s){
   else hideReveal(s.votes);
   document.getElementById('c-corn').textContent=(s.corn||0).toLocaleString();
   document.getElementById('c-rock').textContent=(s.rock||0).toLocaleString();
-  document.getElementById('c-heat').textContent=(s.heat||0).toLocaleString();
   (s.reactions||[]).forEach(r=>{
     const emo = r.type==='rock'?'🪨':r.type==='corn'?'🍿':'👏';
     const n=Math.min(10,r.n);
@@ -641,20 +712,49 @@ function onChat(m){
   const log=document.getElementById('chatlog');
   const d=document.createElement('div');
   const sideCls=m.side==='A'?'a':m.side==='B'?'b':'';
+  const rp=m.msgId?`<button class="rp" title="신고" onclick="reportMsg(${m.msgId},this)">🚩</button>`:'';
   if(m.fighter){ // 선수 발언 — 강조 표시
     d.className='cm fm '+sideCls;
-    d.innerHTML=`<span class="n">⚔ ${esc(m.nick)} [선수 ${m.fighter}]</span> ${esc(m.text)}`;
+    d.innerHTML=`<span class="n">⚔ ${esc(m.nick)} [선수 ${m.fighter}]</span> <span class="body">${esc(m.text)}</span>${rp}`;
   } else {
     d.className='cm '+sideCls;
     const tag=m.side==='A'?'[A편] ':m.side==='B'?'[B편] ':'';
-    d.innerHTML=`<span class="n">${tag}${esc(m.nick)}</span> ${esc(m.text)}`;
+    d.innerHTML=`<span class="n">${tag}${esc(m.nick)}</span> <span class="body">${esc(m.text)}</span>${rp}`;
   }
+  if(m.msgId) d.dataset.mid=m.msgId;
   log.appendChild(d); log.scrollTop=log.scrollHeight;
   spawnDanmaku((m.fighter?'⚔ ':'')+m.text.slice(0,24));
 }
+function reportMsg(id,btn){ sendWs({type:'report',msgId:id}); if(btn){btn.textContent='✓'; btn.disabled=true;} }
+function onBlind(m){
+  const d=document.querySelector(`#chatlog .cm[data-mid="${m.msgId}"]`);
+  if(!d) return;
+  d.classList.add('bl');
+  const rp=d.querySelector('.rp'); if(rp) rp.remove();
+  d.onclick=()=>d.classList.toggle('show'); // 탭해서 보기/가리기
+}
 
 /* verdict */
+let lastVerdict=null;
+function copyVerdict(){
+  if(!lastVerdict||!cur) return;
+  const v=lastVerdict;
+  const txt=`⚔ 사이버 투기장 판결\n"${cur.topic}"\n🏆 승: ${v.winner} (A ${v.totalA}% : B ${v.totalB}%)\n배심원 ${v.totalN}명${v.changed>0?' · 마음 바뀐 사람 '+v.changed+'명':''}\n👉 직접 판결하러 가기: ${location.origin}/#${cur.id}`;
+  const btn=document.getElementById('copyBtn');
+  const done=()=>{ btn.textContent='✓ 복사됨! 커뮤니티에 붙여넣으세요'; setTimeout(()=>btn.textContent='📋 결과 복사해서 자랑하기',2200); };
+  if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(done).catch(()=>prompt('복사하세요',txt));
+  else prompt('복사하세요',txt);
+}
 function onVerdict(m){
+  lastVerdict=m;
+  // 전적 기록: 투표했으면 참여+, 내 최종 표가 판결과 일치하면 적중+
+  if(myVote!==null&&myVote!==undefined){
+    stats.games++;
+    const my=myVote>0?'A':myVote<0?'B':'N';
+    if(my===m.winSide) stats.correct++;
+  }
+  if(mySeat){ stats.fights++; if(mySeat===m.winSide) stats.fightWins++; }
+  saveStats(); updateMe();
   document.getElementById('s-live').classList.add('hidden');
   document.getElementById('s-verdict').classList.remove('hidden');
   document.getElementById('v-win').textContent=m.winner+' 승';
