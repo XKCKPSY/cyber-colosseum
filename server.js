@@ -136,14 +136,23 @@ function lobbyPayload() {
       if (revealed) o.opinionA = Math.round(computeOpinionA(r));
       return o;
     }),
+    recentVerdicts: verdictLog.slice(0, 8), // 로비 하단 최근 판결
   };
 }
 
 /* ---------------- WebSocket ---------------- */
 let nextId = 1;
 let nextRoomId = 1;                 // 유저가 만든 방 id 카운터
+let nextMsgId = 1;                  // 채팅 메시지 id (신고용)
 const allClients = new Set();       // 접속한 모든 클라이언트 (로비 갱신 브로드캐스트용)
 const NICKS = ['아무개', '이름없는검투사', '관전러', '팝콘요정', '판사지망생', '중립기어', '키배관찰자'];
+const chatMeta = new Map();         // msgId → {reporters:Set, roomId, blinded} (최근 500건)
+const verdictLog = [];              // 최근 판결 아카이브 (최대 20건)
+
+function sanitizeNick(n) {
+  const s = String(n || '').replace(/[<>"'&\s]/g, '').slice(0, 16);
+  return s.length >= 2 ? s : null;
+}
 
 function send(ws, obj) { if (ws.readyState === 1) ws.send(JSON.stringify(obj)); }
 function broadcast(room, obj) { for (const ws of room.clients) send(ws, obj); }
@@ -169,6 +178,13 @@ wsLite.attach(server, (ws) => {
     const room = ws.room ? rooms.get(ws.room) : null;
 
     switch (m.type) {
+      case 'hello': { // 저장된 닉네임으로 접속 (익명 전적 유지)
+        const nick = sanitizeNick(m.nick);
+        if (nick) ws.nick = nick;
+        send(ws, { type: 'hello', you: ws.nick });
+        break;
+      }
+
       case 'lobby':
         send(ws, lobbyPayload());
         break;
@@ -249,7 +265,25 @@ wsLite.attach(server, (ws) => {
         if (room.seatA === ws) { side = 'A'; fighter = 'A'; }
         else if (room.seatB === ws) { side = 'B'; fighter = 'B'; }
         else side = m.side === 'A' || m.side === 'B' ? m.side : 'N';
-        broadcast(room, { type: 'chat', side, fighter, nick: ws.nick, text });
+        const msgId = nextMsgId++;
+        chatMeta.set(msgId, { reporters: new Set(), roomId: room.id, blinded: false });
+        if (chatMeta.size > 500) chatMeta.delete(chatMeta.keys().next().value); // 오래된 것부터 정리
+        broadcast(room, { type: 'chat', msgId, side, fighter, nick: ws.nick, text });
+        break;
+      }
+
+      case 'report': { // 메시지 신고 — 3인 이상이면 블라인드
+        if (!room) break;
+        const t = Date.now();
+        if (t - (ws.lastReport || 0) < 2000) break; // 신고 스팸 방지
+        ws.lastReport = t;
+        const meta = chatMeta.get(m.msgId | 0);
+        if (!meta || meta.blinded || meta.roomId !== room.id) break;
+        meta.reporters.add(ws.id);
+        if (meta.reporters.size >= 3) {
+          meta.blinded = true;
+          broadcast(room, { type: 'blind', msgId: m.msgId | 0 });
+        }
         break;
       }
 
@@ -320,6 +354,7 @@ function endMatch(room) {
   room.verdict = {
     type: 'verdict',
     ringId: room.id,
+    topic: room.topic,
     winner: aWin ? room.aClaim : room.bClaim,
     winSide: aWin ? 'A' : 'B',
     totalA: Math.round(opinionA), totalB: Math.round(100 - opinionA),
@@ -328,6 +363,17 @@ function endMatch(room) {
     changed: bToA + aToB, bToA, aToB,
   };
   broadcast(room, room.verdict);
+  // 최근 판결 아카이브 (표가 1표라도 있었던 판만)
+  if (totalN > 0) {
+    verdictLog.unshift({
+      ringId: room.id, cat: room.cat, topic: room.topic,
+      winner: room.verdict.winner, winSide: room.verdict.winSide,
+      totalA: room.verdict.totalA, totalB: room.verdict.totalB,
+      totalN, changed: bToA + aToB, ts: Date.now(),
+    });
+    if (verdictLog.length > 20) verdictLog.pop();
+    broadcastAll(lobbyPayload()); // 로비의 최근 판결 갱신
+  }
 }
 
 /* ---------------- 경기 페이즈 이벤트 ---------------- */
